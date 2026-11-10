@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Parking.Api.Data;
 using Parking.Api.Models;
 using Parking.Api.Contracts;
+using Microsoft.AspNetCore.Authorization;
 namespace Parking.Api.Controllers;
 
 [ApiController]
@@ -35,8 +36,8 @@ public class ParkingLotsController : ControllerBase
 
         return lot is null ? NotFound() : Ok(lot);
     }
-
     [HttpPost]
+    [Authorize]
     public async Task<ActionResult<ParkingLot>> Create(
         CreateParkingLotRequest request, CancellationToken ct)
     {
@@ -53,6 +54,7 @@ public class ParkingLotsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = lot.Id }, lot);
     }
     [HttpPut("{id:int}")]
+    [Authorize]
     public async Task<IActionResult> Update(
     int id, CreateParkingLotRequest request, CancellationToken ct)
     {
@@ -75,6 +77,7 @@ public class ParkingLotsController : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
         var lot = await _db.ParkingLots

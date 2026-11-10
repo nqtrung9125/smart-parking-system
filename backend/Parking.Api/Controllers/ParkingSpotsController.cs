@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Parking.Api.Contracts;
 using Parking.Api.Data;
 using Parking.Api.Models;
-
+using Microsoft.AspNetCore.Authorization;
 namespace Parking.Api.Controllers;
 
 [ApiController]
@@ -42,6 +42,7 @@ public class ParkingSpotsController : ControllerBase
         return spot is null ? NotFound() : Ok(spot);
     }
 
+    [Authorize]
     [HttpPost]
     public async Task<IActionResult> Create(
         CreateParkingSpotRequest request, CancellationToken ct)
