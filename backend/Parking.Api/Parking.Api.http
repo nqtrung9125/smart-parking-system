@@ -1,6 +1,7 @@
-@Parking.Api_HostAddress = http://localhost:5181
+POST https://localhost:7171/api/parking-lots
+Content-Type: application/json
 
-GET {{Parking.Api_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###
+{
+  "name": "Bãi xe trung tâm",
+  "address": "123 Nguyễn Trãi, Hà Nội"
+}
