@@ -47,6 +47,47 @@ namespace Parking.Api.Migrations
 
                     b.ToTable("ParkingLots");
                 });
+
+            modelBuilder.Entity("Parking.Api.Models.ParkingSpot", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("ParkingLotId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParkingLotId", "Code")
+                        .IsUnique();
+
+                    b.ToTable("ParkingSpots");
+                });
+
+            modelBuilder.Entity("Parking.Api.Models.ParkingSpot", b =>
+                {
+                    b.HasOne("Parking.Api.Models.ParkingLot", "ParkingLot")
+                        .WithMany()
+                        .HasForeignKey("ParkingLotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ParkingLot");
+                });
 #pragma warning restore 612, 618
         }
     }

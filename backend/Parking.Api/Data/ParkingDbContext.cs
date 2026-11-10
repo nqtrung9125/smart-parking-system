@@ -11,4 +11,20 @@ public class ParkingDbContext : DbContext
     }
 
     public DbSet<ParkingLot> ParkingLots => Set<ParkingLot>();
+    public DbSet<ParkingSpot> ParkingSpots => Set<ParkingSpot>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<ParkingSpot>()
+            .HasIndex(x => new { x.ParkingLotId, x.Code })
+            .IsUnique();
+
+        modelBuilder.Entity<ParkingSpot>()
+            .HasOne(x => x.ParkingLot)
+            .WithMany()
+            .HasForeignKey(x => x.ParkingLotId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
 }
