@@ -52,4 +52,39 @@ public class ParkingLotsController : ControllerBase
 
         return CreatedAtAction(nameof(GetById), new { id = lot.Id }, lot);
     }
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> Update(
+    int id, CreateParkingLotRequest request, CancellationToken ct)
+    {
+        var lot = await _db.ParkingLots
+            .FirstOrDefaultAsync(x => x.Id == id, ct);
+
+        if (lot is null) return NotFound();
+
+        var name = request.Name.Trim();
+        var address = request.Address.Trim();
+
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(address))
+            return BadRequest("Tên và địa chỉ không được để trống.");
+
+        lot.Name = name;
+        lot.Address = address;
+        await _db.SaveChangesAsync(ct);
+
+        return NoContent();
+    }
+
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id, CancellationToken ct)
+    {
+        var lot = await _db.ParkingLots
+            .FirstOrDefaultAsync(x => x.Id == id, ct);
+
+        if (lot is null) return NotFound();
+
+        _db.ParkingLots.Remove(lot);
+        await _db.SaveChangesAsync(ct);
+
+        return NoContent();
+    }
 }
