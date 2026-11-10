@@ -74,4 +74,17 @@ public class ParkingSpotsController : ControllerBase
 
         return CreatedAtAction(nameof(GetById), new { id = spot.Id }, result);
     }
+
+    [HttpPatch("{id:int}/active")]
+    [Authorize(Roles = "Admin,Staff")]
+    public async Task<IActionResult> SetActive(int id, [FromBody] SetSpotActiveRequest request, CancellationToken ct)
+    {
+        var spot = await _db.ParkingSpots.FirstOrDefaultAsync(s => s.Id == id, ct);
+        if (spot is null) return NotFound();
+        if (!request.IsActive && await _db.ParkingSessions.AnyAsync(s => s.ParkingSpotId == id && s.CheckOutUtc == null, ct))
+            return Conflict("Chỗ đang có xe gửi.");
+        spot.IsActive = request.IsActive;
+        await _db.SaveChangesAsync(ct);
+        return NoContent();
+    }
 }

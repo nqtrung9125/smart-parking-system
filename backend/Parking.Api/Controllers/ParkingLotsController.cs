@@ -86,6 +86,9 @@ public class ParkingLotsController : ControllerBase
 
         if (lot is null) return NotFound();
 
+        if (await _db.ParkingSpots.AnyAsync(s => s.ParkingLotId == id, ct))
+            return Conflict("Bãi xe còn chỗ đỗ; không thể xóa.");
+
         _db.ParkingLots.Remove(lot);
         await _db.SaveChangesAsync(ct);
 

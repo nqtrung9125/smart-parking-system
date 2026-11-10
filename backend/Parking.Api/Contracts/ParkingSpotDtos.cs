@@ -18,3 +18,5 @@ public class CreateParkingSpotRequest
 public record ParkingSpotResponse(
     int Id, int ParkingLotId, string Code,
     ParkingSpotType Type, bool IsActive);
+
+public sealed record SetSpotActiveRequest(bool IsActive);

@@ -14,6 +14,8 @@ var connectionString = builder.Configuration.GetConnectionString("ParkingDb")
 builder.Services.AddDbContext<ParkingDbContext>(options =>
     options.UseNpgsql(connectionString));
 builder.Services.AddAuthorization();
+builder.Services.AddCors(options => options.AddPolicy("ReactDev", policy =>
+    policy.WithOrigins("http://localhost:5173").AllowAnyHeader().AllowAnyMethod()));
 
 builder.Services.AddIdentityApiEndpoints<IdentityUser>()
     .AddRoles<IdentityRole>()
@@ -27,6 +29,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseCors("ReactDev");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapGroup("/api/auth").MapIdentityApi<IdentityUser>();
