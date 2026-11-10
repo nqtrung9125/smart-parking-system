@@ -41,8 +41,8 @@ public class ParkingSpotsController : ControllerBase
 
         return spot is null ? NotFound() : Ok(spot);
     }
-
-    [Authorize]
+    
+ [Authorize(Roles = "Admin,Staff")]
     [HttpPost]
     public async Task<IActionResult> Create(
         CreateParkingSpotRequest request, CancellationToken ct)

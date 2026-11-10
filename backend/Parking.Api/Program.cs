@@ -31,5 +31,5 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapGroup("/api/auth").MapIdentityApi<IdentityUser>();
 app.MapControllers();
-
+await IdentitySeeder.SeedAsync(app);
 app.Run();
