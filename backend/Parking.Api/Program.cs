@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Parking.Api.Data;
+using Microsoft.AspNetCore.Identity;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -12,6 +13,11 @@ var connectionString = builder.Configuration.GetConnectionString("ParkingDb")
 
 builder.Services.AddDbContext<ParkingDbContext>(options =>
     options.UseNpgsql(connectionString));
+builder.Services.AddAuthorization();
+
+builder.Services.AddIdentityApiEndpoints<IdentityUser>()
+    .AddRoles<IdentityRole>()
+    .AddEntityFrameworkStores<ParkingDbContext>();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -21,9 +27,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
+app.UseAuthentication();
 app.UseAuthorization();
-
+app.MapGroup("/api/auth").MapIdentityApi<IdentityUser>();
 app.MapControllers();
 
 app.Run();

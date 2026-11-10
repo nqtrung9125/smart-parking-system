@@ -1,9 +1,10 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Parking.Api.Models;
-
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 namespace Parking.Api.Data;
 
-public class ParkingDbContext : DbContext
+public class ParkingDbContext : IdentityDbContext<IdentityUser>
 {
     public ParkingDbContext(DbContextOptions<ParkingDbContext> options)
         : base(options)

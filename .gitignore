@@ -6,3 +6,4 @@
 **/.env
 **/secrets.json
 **/*.user
+**/*.local.http
