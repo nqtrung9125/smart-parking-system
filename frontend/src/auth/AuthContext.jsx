@@ -19,8 +19,8 @@ export function AuthProvider({ children }) {
     return () => { active = false }
   }, [token])
 
-  async function login(email, password) {
-    const result = await api('/api/auth/login?useCookies=false', { method: 'POST', body: { email, password } })
+  async function login(email, password, secondFactor) {
+    const result = await api('/api/auth/login?useCookies=false', { method: 'POST', body: { email, password, ...secondFactor } })
     const profile = await api('/api/me', { token: result.accessToken })
     sessionStorage.setItem(storageKey, result.accessToken)
     setUser(profile)

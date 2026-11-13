@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Parking.Api.Models;
 
-public enum PaymentMethod { Cash = 1, DemoCard = 2 }
+public enum PaymentMethod { Cash = 1, DemoCard = 2, BankTransfer = 3 }
 
 public class Payment
 {

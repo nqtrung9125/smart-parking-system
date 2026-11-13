@@ -17,8 +17,11 @@ export async function api(path, { method = 'GET', body, token, signal } = {}) {
   try { data = raw ? JSON.parse(raw) : null } catch { /* Some API errors are plain text. */ }
   if (!response.ok) {
     const detail = typeof data === 'string' ? data :
-      data?.detail || data?.title || Object.values(data?.errors || {}).flat().join(' ')
-    throw new Error(detail || `Yêu cầu thất bại (${response.status}).`)
+      Object.values(data?.errors || {}).flat().join(' ') || data?.detail || data?.title
+    const error = new Error(response.status === 429 ? 'Bạn thao tác quá nhanh. Hãy thử lại sau một phút.' : detail || `Yêu cầu thất bại (${response.status}).`)
+    error.status = response.status
+    error.detail = data?.detail
+    throw error
   }
   return data
 }

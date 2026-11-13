@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import { useResource } from '../lib/useResource'
 import { dateTime, money, vehicleType } from '../lib/format'
 import { PageHeader, Notice, Loading, Empty, Field } from '../components/Ui'
+import QrImage from '../components/QrImage'
 
 export function StaffCheckInPage() {
   const { token } = useAuth()
@@ -61,6 +62,8 @@ export function StaffCheckOutPage() {
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [busyId, setBusyId] = useState(null)
+  const [transfer, setTransfer] = useState(null)
+  const [transaction, setTransaction] = useState('')
 
   async function checkOut(id) {
     setBusyId(id); setError(''); setMessage('')
@@ -70,14 +73,29 @@ export function StaffCheckOutPage() {
       active.refresh(); unpaid.refresh()
     } catch (cause) { setError(cause.message) } finally { setBusyId(null) }
   }
-  async function pay(id) {
+  async function openTransfer(id) {
     setBusyId(id); setError(''); setMessage('')
-    try { await api(`/api/payments/parking-session/${id}`, { method: 'POST', token, body: { method: 1 } }); setMessage(`Đã ghi nhận thanh toán tiền mặt cho lượt #${id}.`); unpaid.refresh() }
+    try { const details = await api('/api/payments/parking-session/' + id + '/transfer', { token }); setTransfer({ ...details, id }); setTransaction('') }
+    catch (cause) { setError(cause.message) }
+    finally { setBusyId(null) }
+  }
+  async function pay(id, method = 1) {
+    setBusyId(id); setError(''); setMessage('')
+    try { await api(`/api/payments/parking-session/${id}`, { method: 'POST', token, body: { method, note: method === 3 ? transaction.trim() : undefined } }); setMessage(`Đã ghi nhận thanh toán cho lượt #${id}.`); setTransfer(null); unpaid.refresh() }
     catch (cause) { setError(cause.message) } finally { setBusyId(null) }
   }
 
-  return <main className="page-wrap"><PageHeader eyebrow="NHÂN VIÊN · CỔNG RA" title="Trả xe & thanh toán" description="Ghi nhận xe ra, kiểm tra phí và thu tiền mặt tại quầy." actions={<Link className="button light-button" to="/staff/check-in">← Nhận xe</Link>} /><Notice error={error || active.error || unpaid.error} success={message} />
+  return <main className="page-wrap"><PageHeader eyebrow="NHÂN VIÊN · CỔNG RA" title="Trả xe & thanh toán" description="Ghi nhận xe ra, kiểm tra phí và thu tiền mặt hoặc chuyển khoản tại quầy." actions={<Link className="button light-button" to="/staff/check-in">← Nhận xe</Link>} /><Notice error={error || active.error || unpaid.error} success={message} />
     <section className="panel"><div className="panel-head"><h2>Xe đang trong bãi</h2><button className="button light-button" onClick={active.refresh}>Cập nhật</button></div>{active.loading ? <Loading /> : !active.data?.length ? <Empty>Hiện không có xe đang gửi.</Empty> : <div className="data-list">{active.data.map((item) => <div className="data-item" key={item.id}><div><strong>{item.plateNumber} · chỗ {item.code}</strong><span>Vào bãi: {dateTime(item.checkInUtc)} · Lượt #{item.id}</span></div><button className="button main-button" disabled={busyId === item.id} onClick={() => checkOut(item.id)}>Ghi nhận xe ra</button></div>)}</div>}</section>
-    <section className="panel section-gap"><div className="panel-head"><div><h2>Chờ thanh toán</h2><p>Thanh toán ở đây chỉ là ghi nhận tiền mặt tại quầy.</p></div><button className="button light-button" onClick={unpaid.refresh}>Cập nhật</button></div>{unpaid.loading ? <Loading /> : !unpaid.data?.length ? <Empty>Không có lượt gửi chờ thanh toán.</Empty> : <div className="data-list">{unpaid.data.map((item) => <div className="data-item" key={item.id}><div><strong>{item.plateNumber} · {money(item.fee)}</strong><span>Ra bãi: {dateTime(item.checkOutUtc)} · Lượt #{item.id}</span></div><button className="button main-button" disabled={busyId === item.id} onClick={() => pay(item.id)}>Đã thu tiền mặt</button></div>)}</div>}</section>
+    <section className="panel section-gap"><div className="panel-head"><div><h2>Chờ thanh toán</h2><p>Chỉ ghi nhận sau khi đã thu tiền hoặc xác minh giao dịch.</p></div><button className="button light-button" onClick={unpaid.refresh}>Cập nhật</button></div>{unpaid.loading ? <Loading /> : !unpaid.data?.length ? <Empty>Không có lượt gửi chờ thanh toán.</Empty> : <div className="data-list">{unpaid.data.map((item) => <div className="data-item" key={item.id}><div><strong>{item.plateNumber} · {money(item.fee)}</strong><span>Ra bãi: {dateTime(item.checkOutUtc)} · Lượt #{item.id}</span></div><div className="payment-actions"><button className="button light-button" disabled={busyId != null} onClick={() => openTransfer(item.id)}>Chuyển khoản QR</button><button className="button main-button" disabled={busyId != null} onClick={() => pay(item.id)}>Đã thu tiền mặt</button></div></div>)}</div>}</section>
+    {transfer && <section className="panel section-gap">
+      <div className="panel-head"><h2>Chuyển khoản lượt #{transfer.id}</h2><button className="button light-button" type="button" onClick={() => setTransfer(null)}>Đóng</button></div>
+      {transfer.enabled ? <form onSubmit={(event) => { event.preventDefault(); pay(transfer.id, 3) }}>
+        <div className="qr-block"><QrImage key={transfer.id} value={transfer.payload} label="Mã VietQR chuyển khoản phí gửi xe" /><div><p>{transfer.name} · {transfer.account}</p><p><strong>{money(transfer.amount)}</strong> · Nội dung: <code>{transfer.reference}</code></p></div></div>
+        <p>Kiểm tra số tiền và nội dung trên tài khoản nhận trước khi xác nhận.</p>
+        <Field label="Mã giao dịch đã đối soát"><input maxLength={80} value={transaction} onChange={(event) => setTransaction(event.target.value)} required /></Field>
+        <button className="button main-button" disabled={busyId != null || !transaction.trim()}>Xác nhận đã nhận chuyển khoản</button>
+      </form> : <p>Bãi xe chưa cấu hình tài khoản nhận chuyển khoản. Bạn có thể thu tiền mặt.</p>}
+    </section>}
   </main>
 }

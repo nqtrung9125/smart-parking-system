@@ -1,7 +1,7 @@
 :root {
   font-family: 'Segoe UI', Arial, sans-serif;
-  color: #173348;
-  background: #f4f7f6;
+  color: #152840;
+  background: #f5f7fa;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -9,7 +9,7 @@
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body { margin: 0; min-width: 320px; }
-button, input { font: inherit; }
+button, input, select { font: inherit; }
 button { cursor: pointer; }
 a { color: inherit; }
 ::selection { background: #f6cf75; color: #173348; }

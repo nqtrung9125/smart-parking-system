@@ -8,14 +8,16 @@ import ReservationsPage from './pages/ReservationsPage'
 import HistoryPage from './pages/HistoryPage'
 import { StaffCheckInPage, StaffCheckOutPage } from './pages/StaffPages'
 import { AdminDashboardPage, AdminManagePage } from './pages/AdminPages'
+import SecurityPage from './pages/SecurityPage'
 
 export default function AppRouter() {
   return <Routes>
     <Route path="/" element={<Home />} />
     <Route element={<Layout />}>
       <Route path="/lots/:id" element={<LotDetailPage />} />
-      <Route path="/login" element={<AuthPage />} />
-      <Route path="/register" element={<AuthPage register />} />
+      <Route path="/login" element={<AuthPage key="login" />} />
+      <Route path="/register" element={<AuthPage key="register" register />} />
+      <Route path="/security" element={<RequireAuth><SecurityPage /></RequireAuth>} />
       <Route path="/vehicles" element={<RequireAuth><VehiclesPage /></RequireAuth>} />
       <Route path="/reservations" element={<RequireAuth><ReservationsPage /></RequireAuth>} />
       <Route path="/history" element={<RequireAuth><HistoryPage /></RequireAuth>} />

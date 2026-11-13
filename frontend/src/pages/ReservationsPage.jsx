@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { useAuth } from '../auth/useAuth'
 import { api } from '../lib/api'
 import { useResource } from '../lib/useResource'
@@ -13,13 +13,14 @@ function localTime(offsetMinutes) {
 
 export default function ReservationsPage() {
   const { token } = useAuth()
+  const [params] = useSearchParams()
   const vehicles = useResource('/api/vehicles/mine', token)
   const lots = useResource('/api/parking-lots')
   const spots = useResource('/api/parking-spots')
   const reservations = useResource('/api/reservations/mine', token)
   const [vehicleId, setVehicleId] = useState('')
-  const [lotId, setLotId] = useState('')
-  const [spotId, setSpotId] = useState('')
+  const [lotId, setLotId] = useState(() => params.get('lot') || '')
+  const [spotId, setSpotId] = useState(() => params.get('spot') || '')
   const [start, setStart] = useState(() => localTime(10))
   const [end, setEnd] = useState(() => localTime(70))
   const [busy, setBusy] = useState(false)
@@ -46,12 +47,12 @@ export default function ReservationsPage() {
     <Notice error={error || vehicles.error || lots.error || spots.error || reservations.error} success={message} />
     <div className="two-column wide-left"><form className="panel" onSubmit={create}><h2>Đặt chỗ mới</h2>
       {!vehicles.loading && !vehicles.data?.length && <p className="helper-text">Bạn cần <Link to="/vehicles">đăng ký xe</Link> trước khi đặt chỗ.</p>}
-      <Field label="Xe của bạn"><select value={vehicleId} onChange={(event) => { setVehicleId(event.target.value); setSpotId('') }} required><option value="">Chọn xe</option>{vehicles.data?.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.plateNumber} · {vehicleType(vehicle.type)}</option>)}</select></Field>
+      <Field label="Xe của bạn"><select value={vehicleId} onChange={(event) => { const value = event.target.value; setVehicleId(value); if (spots.data?.find((spot) => spot.id === Number(spotId))?.type !== vehicles.data?.find((vehicle) => vehicle.id === Number(value))?.type) setSpotId('') }} required><option value="">Chọn xe</option>{vehicles.data?.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.plateNumber} · {vehicleType(vehicle.type)}</option>)}</select></Field>
       <Field label="Bãi xe"><select value={lotId} onChange={(event) => { setLotId(event.target.value); setSpotId('') }} required><option value="">Chọn bãi xe</option>{lots.data?.map((lot) => <option key={lot.id} value={lot.id}>{lot.name}</option>)}</select></Field>
       <Field label="Chỗ đỗ"><select value={spotId} onChange={(event) => setSpotId(event.target.value)} required><option value="">Chọn chỗ phù hợp</option>{possibleSpots.map((spot) => <option key={spot.id} value={spot.id}>{spot.code} · {vehicleType(spot.type)}</option>)}</select></Field>
       <div className="form-grid"><Field label="Bắt đầu"><input type="datetime-local" value={start} onChange={(event) => setStart(event.target.value)} required /></Field><Field label="Kết thúc"><input type="datetime-local" value={end} onChange={(event) => setEnd(event.target.value)} required /></Field></div>
       <p className="helper-text">Tối đa 24 giờ, bắt đầu trong tương lai. Giờ được đổi sang UTC khi gửi API. Trạng thái chỗ sẽ được kiểm tra lại lúc xác nhận.</p>
-      <button className="button main-button" disabled={busy || !vehicles.data?.length}>{busy ? 'Đang đặt…' : 'Xác nhận đặt chỗ'}</button>
+      <button className="button main-button" disabled={busy || !vehicleId || !possibleSpots.some((spot) => spot.id === Number(spotId))}>{busy ? 'Đang đặt…' : 'Xác nhận đặt chỗ'}</button>
     </form><section className="panel"><h2>Lịch đặt của tôi</h2>{reservations.loading ? <Loading /> : !reservations.data?.length ? <Empty>Bạn chưa có lịch đặt nào.</Empty> : <div className="data-list">{reservations.data.map((item) => <div className="data-item stacked" key={item.id}><div><strong>Đơn #{item.id} · {spots.data?.find((s) => s.id === item.parkingSpotId)?.code || 'Chỗ đỗ'}</strong><span>{dateTime(item.startUtc)} – {dateTime(item.endUtc)}</span><span className="status-text">{reservationStatus[item.status]}</span></div>{item.status === 1 && <button className="text-danger" onClick={() => cancel(item.id)}>Hủy</button>}</div>)}</div>}</section></div>
   </main>
 }
