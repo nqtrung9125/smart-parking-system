@@ -23,7 +23,7 @@ export default function AuthPage({ register = false }) {
     try {
       const factor = secondStep ? { [useRecovery ? 'twoFactorRecoveryCode' : 'twoFactorCode']: code.trim() } : undefined
       const profile = await (register ? createAccount(email.trim(), password) : login(email.trim(), password, factor))
-      const destination = location.state?.from || (profile.roles.includes('Admin') ? '/admin' : profile.roles.includes('Staff') ? '/staff/check-in' : '/vehicles')
+      const destination = location.state?.from || (profile.roles.includes('Admin') ? '/admin' : profile.roles.includes('Staff') ? '/staff/check-in' : '/account')
       navigate(destination, { replace: true })
     } catch (cause) {
       if (!register && cause.detail === 'RequiresTwoFactor') setSecondStep(true)

@@ -1,4 +1,25 @@
 .workspace-shell { min-height: 100vh; background: #f4f7f6; }
+.booking-grid { grid-template-columns: minmax(280px, .85fr) minmax(0, 1.15fr); }
+.booking-preview { min-width: 0; }
+.parking-plan { display: block; width: 100%; height: auto; max-height: 380px; margin-inline: auto; border-radius: 10px; background: #293743; }
+.booking-preview .spot-scene-preview { height: clamp(255px, 36vw, 390px); min-height: 0; }
+.preview-caption { margin-top: 13px; display: flex; align-items: center; gap: 7px 9px; flex-wrap: wrap; color: #44596c; font-size: 13px; }
+.preview-caption i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+.preview-caption strong { color: #152840; }
+.account-link { display: inline-flex; align-items: center; gap: 8px; min-width: 0; padding: 5px 8px 5px 5px; color: #152840; background: #fff; border: 1px solid #dbe6ed; border-radius: 11px; text-decoration: none; }
+.account-link:hover { background: #eaf8f4; border-color: #a0d6cc; }
+.account-avatar { display: inline-grid; place-items: center; flex: none; width: 35px; height: 35px; border-radius: 9px; color: #0d6b60; background: #dbf4eb; font-size: 14px; font-weight: 800; letter-spacing: -.035em; }
+.account-link-copy { display: flex; flex-direction: column; min-width: 0; max-width: 139px; gap: 1px; text-align: left; }
+.account-link-copy strong, .account-link-copy > span { text-overflow: ellipsis; white-space: nowrap; overflow: hidden; font-size: 12px; }
+.account-link-copy > span { color: #526478; font-size: 10px; }.account-link-arrow { color: #087b70; font-size: 14px; }
+.account-overview { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px; background: linear-gradient(125deg, #112841, #1d4c5b); color: #f2f8fe; padding: clamp(18px, 3vw, 33px); border-radius: 17px; }
+.profile-identity { display: flex; align-items: center; gap: 15px; min-width: 0; }.profile-identity > div { min-width: 0; }.profile-avatar { width: 66px; height: 66px; font-size: 25px; border-radius: 17px; }
+.profile-overline { font-size: 10px; font-weight: 750; letter-spacing: .12em; color: #b7e8df; }.profile-identity h2 { margin: 3px 0; color: #fff; font-size: clamp(22px, 4vw, 32px); overflow-wrap: anywhere; }.profile-identity p { margin: 4px 0 10px; color: #d7e8f5; overflow-wrap: anywhere; font-size: 14px; }
+.profile-roles { display: flex; gap: 7px; flex-wrap: wrap; }.profile-roles span { font-size: 11px; border: 1px solid #7dcbbb80; color: #cbf6ea; border-radius: 14px; padding: 4px 8px; }
+.profile-metrics { display: flex; gap: 8px; flex-wrap: wrap; }.profile-metrics a { display: grid; gap: 3px; text-decoration: none; color: #dbe8ef; font-size: 12px; padding: 10px 13px; background: #ffffff16; border: 1px solid #ffffff38; border-radius: 9px; }.profile-metrics a:hover { background: #ffffff2b; }.profile-metrics strong { color: #fff; font-size: 22px; }
+.profile-security { margin-block: 0 17px; }.profile-security > div { display: flex; justify-content: space-between; align-items: center; gap: 10px; }.profile-security dd { margin: 0; }
+@media (max-width: 780px) { .booking-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 400px) { .account-link-copy { max-width: 83px; }.account-link-arrow { display: none; }.landing-nav { gap: 8px; }.profile-avatar { width: 47px; height: 47px; font-size: 18px; } }
 .map-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
 .map-stats .stat-box span { display: flex; gap: 7px; align-items: center; }
 .state-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; display: inline-block; }

@@ -9,6 +9,7 @@ import HistoryPage from './pages/HistoryPage'
 import { StaffCheckInPage, StaffCheckOutPage } from './pages/StaffPages'
 import { AdminDashboardPage, AdminManagePage } from './pages/AdminPages'
 import SecurityPage from './pages/SecurityPage'
+import AccountPage from './pages/AccountPage'
 
 export default function AppRouter() {
   return <Routes>
@@ -18,6 +19,7 @@ export default function AppRouter() {
       <Route path="/login" element={<AuthPage key="login" />} />
       <Route path="/register" element={<AuthPage key="register" register />} />
       <Route path="/security" element={<RequireAuth><SecurityPage /></RequireAuth>} />
+      <Route path="/account" element={<RequireAuth><AccountPage /></RequireAuth>} />
       <Route path="/vehicles" element={<RequireAuth><VehiclesPage /></RequireAuth>} />
       <Route path="/reservations" element={<RequireAuth><ReservationsPage /></RequireAuth>} />
       <Route path="/history" element={<RequireAuth><HistoryPage /></RequireAuth>} />

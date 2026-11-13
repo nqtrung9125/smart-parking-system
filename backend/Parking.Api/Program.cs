@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Parking.Api.Data;
+using Parking.Api.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authentication.BearerToken;
 using Microsoft.AspNetCore.RateLimiting;
@@ -10,6 +11,7 @@ var builder = WebApplication.CreateBuilder(args.Where(arg => arg != "--seed-da-n
 // Add services to the container.
 
 builder.Services.AddControllers();
+builder.Services.AddSingleton<OccupancyDataset>();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 var connectionString = builder.Configuration.GetConnectionString("ParkingDb")

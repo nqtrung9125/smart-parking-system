@@ -2,9 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from './api'
 
 export function useResource(path, token) {
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [result, setResult] = useState(null)
   const [version, setVersion] = useState(0)
 
   useEffect(() => {
@@ -12,12 +10,12 @@ export function useResource(path, token) {
     const controller = new AbortController()
     let active = true
     api(path, { token, signal: controller.signal })
-      .then((result) => { if (active) { setData(result); setError('') } })
-      .catch((cause) => { if (active && cause.name !== 'AbortError') setError(cause.message) })
-      .finally(() => { if (active) setLoading(false) })
+      .then((data) => { if (active) setResult({ path, token, version, data, error: '' }) })
+      .catch((cause) => { if (active && cause.name !== 'AbortError') setResult({ path, token, version, data: null, error: cause.message }) })
     return () => { active = false; controller.abort() }
   }, [path, token, version])
 
-  function refresh() { setLoading(true); setVersion((v) => v + 1) }
-  return { data, loading, error, refresh }
+  function refresh() { setVersion((v) => v + 1) }
+  const match = !!path && result?.path === path && result?.token === token && result?.version === version
+  return { data: match ? result.data : null, loading: !!path && !match, error: match ? result.error : '', refresh }
 }

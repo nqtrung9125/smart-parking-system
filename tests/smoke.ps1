@@ -70,6 +70,17 @@ Expect $login.Status 200 'customer login'
 $customerToken = $login.Data.accessToken
 if (-not $customerToken) { throw 'Customer bearer token missing' }
 Expect (CallApi 'GET' '/api/me' $null $customerToken).Status 200 'customer profile'
+Expect (CallApi 'PUT' '/api/me' @{ displayName = 'No session' }).Status 401 'profile changes require login'
+Expect (CallApi 'PUT' '/api/me' @{ contactPhone = 'not a phone' } $customerToken).Status 400 'invalid phone is rejected'
+$saved = CallApi 'PUT' '/api/me' @{ displayName = '  Parking Test  '; contactPhone = '+84901234567'; email = 'changed@example.test'; roles = @('Admin') } $customerToken
+Expect $saved.Status 200 'customer saves own profile'
+Expect $saved.Data.displayName 'Parking Test' 'display name trimmed'
+Expect $saved.Data.contactPhone '+84901234567' 'phone saved'
+Expect $saved.Data.email $email 'profile save cannot change login email'
+Expect @($saved.Data.roles).Count 0 'profile save cannot assign roles'
+Expect (CallApi 'GET' '/api/me' $null $customerToken).Data.displayName 'Parking Test' 'profile persists on reload'
+Expect (CallApi 'GET' '/api/me' $null $adminToken).Data.displayName $null 'customer data isolated from admin account'
+Expect (CallApi 'PUT' '/api/me' @{ displayName = $null; contactPhone = $null } $customerToken).Status 200 'optional profile fields can be cleared'
 
 Expect (CallApi 'POST' '/api/parking-lots' @{ name = 'Forbidden'; address = 'Forbidden' } $customerToken).Status 403 'customer cannot create lot'
 Expect (CallApi 'GET' '/api/dashboard/summary' $null $customerToken).Status 403 'customer cannot read dashboard'

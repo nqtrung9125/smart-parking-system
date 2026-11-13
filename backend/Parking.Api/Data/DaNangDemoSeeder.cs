@@ -4,9 +4,21 @@ using Parking.Api.Models;
 
 namespace Parking.Api.Data;
 
-/// <summary>Creates clearly labeled fictional lots and activity for the classroom demo.</summary>
+/// <summary>Creates or updates the fictional Đà Nẵng lots used for the classroom project.</summary>
 public static class DaNangDemoSeeder
 {
+    public const string SyntheticOwnerId = "smartparking-demo-da-nang";
+    internal static readonly (string Key, string Name, string Address, int Capacity)[] Catalog =
+    [
+        ("bach-dang", "Bãi xe Bạch Đằng", "Khu vực đường Bạch Đằng, Hải Châu, Đà Nẵng", 32),
+        ("cau-rong", "Bãi xe Cầu Rồng", "Khu vực đường Nguyễn Văn Linh, Hải Châu, Đà Nẵng", 28),
+        ("my-khe", "Bãi xe Mỹ Khê", "Khu vực đường Võ Nguyên Giáp, Sơn Trà, Đà Nẵng", 40),
+        ("an-thuong", "Bãi xe An Thượng", "Khu vực đường An Thượng 4, Ngũ Hành Sơn, Đà Nẵng", 24),
+        ("bien-dong", "Bãi xe Công viên Biển Đông", "Khu vực đường Phạm Văn Đồng, Sơn Trà, Đà Nẵng", 36),
+        ("helio", "Bãi xe Helio", "Khu vực đường 2 Tháng 9, Hải Châu, Đà Nẵng", 38),
+        ("nguyen-tat-thanh", "Bãi xe Nguyễn Tất Thành", "Khu vực đường Nguyễn Tất Thành, Thanh Khê, Đà Nẵng", 26),
+        ("hoa-khanh", "Bãi xe Hòa Khánh", "Khu vực đường Âu Cơ, Liên Chiểu, Đà Nẵng", 30)
+    ];
     public static async Task SeedAsync(IServiceProvider services)
     {
         await using var scope = services.CreateAsyncScope();
@@ -14,33 +26,31 @@ public static class DaNangDemoSeeder
         await using var tx = await db.Database.BeginTransactionAsync();
         // Serialize runs of this opt-in seed so concurrent invocations cannot duplicate demo data.
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(17301610)");
-        var demoOwner = await db.Users.SingleOrDefaultAsync(u => u.Id == "smartparking-demo-da-nang");
+        var demoOwner = await db.Users.SingleOrDefaultAsync(u => u.Id == SyntheticOwnerId);
         if (demoOwner is null)
         {
-            demoOwner = new IdentityUser { Id = "smartparking-demo-da-nang", SecurityStamp = Guid.NewGuid().ToString() };
+            demoOwner = new IdentityUser { Id = SyntheticOwnerId, SecurityStamp = Guid.NewGuid().ToString() };
             db.Users.Add(demoOwner);
         }
 
-        var catalog = new (string Name, string Address, int Capacity)[]
-        {
-            ("Bãi xe Bạch Đằng", "Khu vực đường Bạch Đằng, Hải Châu, Đà Nẵng", 32),
-            ("Bãi xe Cầu Rồng", "Khu vực đường Nguyễn Văn Linh, Hải Châu, Đà Nẵng", 28),
-            ("Bãi xe Mỹ Khê", "Khu vực đường Võ Nguyên Giáp, Sơn Trà, Đà Nẵng", 40),
-            ("Bãi xe An Thượng", "Khu vực đường An Thượng 4, Ngũ Hành Sơn, Đà Nẵng", 24),
-            ("Bãi xe Công viên Biển Đông", "Khu vực đường Phạm Văn Đồng, Sơn Trà, Đà Nẵng", 36),
-            ("Bãi xe Helio", "Khu vực đường 2 Tháng 9, Hải Châu, Đà Nẵng", 38),
-            ("Bãi xe Nguyễn Tất Thành", "Khu vực đường Nguyễn Tất Thành, Thanh Khê, Đà Nẵng", 26),
-            ("Bãi xe Hòa Khánh", "Khu vực đường Âu Cơ, Liên Chiểu, Đà Nẵng", 30)
-        };
         var random = new Random(1610);
         var now = DateTime.UtcNow;
         var baseDay = now.AddHours(7).Date.AddHours(-7);
         var added = 0;
-        for (var lotIndex = 0; lotIndex < catalog.Length; lotIndex++)
+        var renamed = 0;
+        for (var lotIndex = 0; lotIndex < Catalog.Length; lotIndex++)
         {
-            var entry = catalog[lotIndex];
-            var name = entry.Name + " (Demo)";
+            var entry = Catalog[lotIndex];
+            var name = entry.Name;
             if (await db.ParkingLots.AnyAsync(l => l.Name == name && l.Address == entry.Address)) continue;
+            var legacyName = name + " (Demo)";
+            var existing = await db.ParkingLots.SingleOrDefaultAsync(l => l.Name == legacyName && l.Address == entry.Address);
+            if (existing is not null)
+            {
+                existing.Name = name;
+                renamed++;
+                continue;
+            }
 
             var lot = new ParkingLot { Name = name, Address = entry.Address, CreatedAtUtc = baseDay.AddDays(-35) };
             db.ParkingLots.Add(lot);
@@ -83,6 +93,6 @@ public static class DaNangDemoSeeder
         }
         await db.SaveChangesAsync();
         await tx.CommitAsync();
-        Console.WriteLine($"Da Nang demo: {added} new lot(s).");
+        Console.WriteLine($"Da Nang: {added} added, {renamed} renamed.");
     }
 }

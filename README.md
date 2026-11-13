@@ -38,7 +38,7 @@
 
    Mở `http://localhost:5173`. API dùng `http://localhost:5181`. Visual Studio 2026 có thể mở `backend/Parking.Api/Parking.Api.csproj` và chọn profile `http`. Nếu chạy profile `https`, API ở `https://localhost:7171`; đổi `VITE_API_BASE_URL` tương ứng và tin cậy chứng chỉ phát triển bằng `dotnet dev-certs https --trust`.
 
-## Dữ liệu demo Đà Nẵng
+## Dữ liệu Đà Nẵng và bộ học máy
 
 Sau bước migration, chạy từ thư mục gốc:
 
@@ -46,22 +46,24 @@ Sau bước migration, chạy từ thư mục gốc:
 dotnet run --project backend/Parking.Api --launch-profile http -- --seed-da-nang
 ```
 
-Lệnh này tạo 8 bãi gắn nhãn **(Demo)** ở Đà Nẵng, 254 vị trí, các trạng thái hiện tại và 35 ngày lịch sử mô phỏng. Chạy lại không thêm trùng bãi demo. Đây là dữ liệu minh họa, không dùng để tìm chỗ đỗ ngoài thực tế.
+Lệnh này tạo 8 bãi ở Đà Nẵng với 254 vị trí và trạng thái mô phỏng. Với bản đã cài trước đó, lệnh bỏ hậu tố `(Demo)` khỏi đúng các bãi đã tạo, giữ nguyên mã bãi và dữ liệu liên quan. Có thể chạy lại mà không thêm trùng. Địa chỉ và mặt bằng dùng cho đồ án, không xác nhận một bãi xe đang hoạt động ngoài thực tế.
 
-Kịch bản demo: tìm **Bạch Đằng** → mở chi tiết → chuyển sang **3D** và chọn một ô đỗ → đổi bộ lọc **Ô tô/Xe máy** để xem dự báo tương ứng. Với tài khoản khách, thêm xe cùng loại rồi đặt một vị trí trống; với tài khoản nhân viên, mở **Trả xe & thanh toán** để xem các lượt đang chờ thu phí.
+Bộ [dữ liệu học máy CSV](backend/Parking.Api/Data/Training/da-nang-occupancy.csv) gồm **17.472 dòng theo giờ**, 91 ngày, 8 bãi, có sức chứa và số chỗ có xe theo từng loại. Dữ liệu được sinh từ mẫu giờ cao điểm, ngày thường/cuối tuần và biến động ngẫu nhiên có thể tái tạo bằng `node scripts/generate-training-data.mjs`. CSV không chứa biển số hoặc thông tin tài khoản. API giữ lại 7 ngày cuối để đo sai số trên dữ liệu mô phỏng.
+
+Kịch bản trình bày: tìm **Bạch Đằng** → mở chi tiết → chọn **3D** → chọn một ô trống → **Đặt chỗ**. Trang đặt chỗ mở sẵn đúng ô và góc xem, có thể đổi giữa 2D và 3D trước khi xác nhận. Mở **Tài khoản** từ góc phải để xem vai trò, email và OTP, hoặc cập nhật tên hiển thị và số điện thoại.
 
 ## Giao diện
 
 | Vai trò | Trang |
 | --- | --- |
 | Mọi người | Trang chủ, tìm bãi, sơ đồ 2D/3D, dự báo chỗ trống, đăng ký và đăng nhập |
-| Khách hàng | Xe của tôi, đặt chỗ, lịch sử gửi xe và bảo mật tài khoản |
+| Khách hàng | Hồ sơ tài khoản, xe của tôi, đặt chỗ có xem trước 2D/3D, lịch sử và bảo mật |
 | Nhân viên | Nhận xe, trả xe và ghi nhận thanh toán tiền mặt hoặc chuyển khoản |
 | Quản trị | Dashboard, quản lý bãi xe, chỗ đỗ, tài khoản nhân viên |
 
 Đăng nhập dùng Identity bearer token, hết hạn sau 30 phút, lưu trong `sessionStorage` của tab trình duyệt. Frontend gọi `/api/me` để lấy quyền; API kiểm tra quyền trên từng endpoint. Để bật OTP, đăng nhập và mở **Bảo mật**, xác nhận mật khẩu, quét QR trong ứng dụng xác thực rồi nhập mã 6 số. Cất mã khôi phục trước khi rời trang. Mỗi mã khôi phục chỉ dùng được một lần. OTP không cần dịch vụ SMS hoặc email.
 
-Sơ đồ 3D sắp xếp vị trí từ mã chỗ và không đại diện mặt bằng thực tế. Dự báo dùng k láng giềng gần nhất có trọng số để học số vị trí có xe theo giờ và ngày trong tuần, rồi ước tính số chỗ trống 12 giờ tới. Hệ thống chỉ hiển thị khi có ít nhất 20 lượt hoàn tất và lịch sử trải dài 14 ngày, kèm sai số kiểm tra trên 3 ngày lịch sử gần nhất. Dự báo không tính các lượt đặt trước trong tương lai.
+Sơ đồ 3D sắp xếp vị trí từ mã chỗ. Dự báo dùng k láng giềng gần nhất có trọng số để ước tính chỗ trống 12 giờ tới. API ưu tiên lịch sử vận hành nếu có ít nhất 20 lượt hoàn tất và trải dài 14 ngày, giữ 3 ngày gần nhất để kiểm tra. Khi chưa đủ lịch sử, 8 bãi Đà Nẵng có thể dùng CSV và biểu đồ ghi rõ nguồn mô phỏng. Dự báo không tính các lượt đặt trước trong tương lai.
 
 ## Chuyển khoản QR
 
@@ -89,7 +91,7 @@ Khởi động lại API. Nhân viên mở **Trả xe & thanh toán**, chọn **
 | Thanh toán | `POST /api/payments/parking-session/{id}` | Admin/Staff |
 | Thống kê | `GET /api/dashboard/summary` | Admin/Staff |
 | Nhân viên | `POST /api/admin/staff`, `DELETE /api/admin/staff/{id}` | Admin |
-| Hồ sơ đăng nhập | `GET /api/me` | Đã đăng nhập |
+| Hồ sơ tài khoản | `GET /api/me`, `PUT /api/me` (tên hiển thị, số liên hệ) | Chủ tài khoản |
 | Tra xe và lịch đặt | `GET /api/vehicles/search?plate=`, `GET /api/reservations/active?plate=` | Admin/Staff |
 | Sơ đồ trạng thái | `GET /api/parking-spots/map?parkingLotId=` | Công khai |
 | Dự báo | `GET /api/parking-lots/{id}/forecast?type=` | Công khai |

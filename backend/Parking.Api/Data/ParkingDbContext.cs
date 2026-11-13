@@ -17,10 +17,14 @@ public class ParkingDbContext : IdentityDbContext<IdentityUser>
     public DbSet<Reservation> Reservations => Set<Reservation>();
     public DbSet<ParkingSession> ParkingSessions => Set<ParkingSession>();
     public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<AccountProfile> AccountProfiles => Set<AccountProfile>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+        modelBuilder.Entity<AccountProfile>().HasKey(p => p.UserId);
+        modelBuilder.Entity<AccountProfile>().HasOne(p => p.User).WithOne()
+            .HasForeignKey<AccountProfile>(p => p.UserId);
 
         modelBuilder.Entity<ParkingSpot>()
             .HasIndex(x => new { x.ParkingLotId, x.Code })

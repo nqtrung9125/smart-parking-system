@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { useAuth } from './auth/useAuth'
 import ParkingArtwork from './components/ParkingArtwork'
+import AccountLink from './components/AccountLink'
 import { useResource } from './lib/useResource'
 import './App.css'
 
@@ -36,13 +37,12 @@ export default function App() {
     (!filter || allSpots.some((spot) => spot.parkingLotId === lot.id && spot.isActive && spot.type === filter)))
   const error = lots.error || spots.error
   const busy = lots.loading || spots.loading
-  const accountPath = user?.roles.includes('Admin') ? '/admin' : user?.roles.includes('Staff') ? '/staff/check-in' : '/vehicles'
 
   return <div className="parking-home">
     <header className="landing-header"><div className="landing-container landing-nav">
       <Brand />
       <nav aria-label="Điều hướng chính"><a className="nav-selected" href="#lots">Khám phá</a><a href="#guide">Cách hoạt động</a></nav>
-      <Link className="landing-button nav-button" to={user ? accountPath : '/login'}>{user ? 'Tài khoản' : 'Đăng nhập'} <Icon name="arrow" size={16} /></Link>
+      {user ? <AccountLink user={user} /> : <Link className="landing-button nav-button" to="/login">Đăng nhập <Icon name="arrow" size={16} /></Link>}
     </div></header>
     <main className="landing-container">
       <section className="landing-hero" aria-labelledby="hero-title">

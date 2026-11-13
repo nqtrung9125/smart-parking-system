@@ -14,7 +14,9 @@ export function AuthProvider({ children }) {
     let active = true
     api('/api/me', { token })
       .then((profile) => { if (active) setUser(profile) })
-      .catch(() => { if (active) { sessionStorage.removeItem(storageKey); setToken(null); setUser(null) } })
+      .catch((error) => {
+        if (active && error.status === 401) { sessionStorage.removeItem(storageKey); setToken(null); setUser(null) }
+      })
       .finally(() => { if (active) setReady(true) })
     return () => { active = false }
   }, [token])
@@ -41,7 +43,7 @@ export function AuthProvider({ children }) {
     setReady(true)
   }
 
-  return <AuthContext.Provider value={{ token, user, ready: ready || !token, login, register, logout }}>
+  return <AuthContext.Provider value={{ token, user, ready: ready || !token, login, register, logout, setProfile: setUser }}>
     {children}
   </AuthContext.Provider>
 }

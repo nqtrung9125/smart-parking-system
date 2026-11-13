@@ -8,7 +8,7 @@ import QrImage from '../components/QrImage'
 const endpoint = '/api/security/authenticator'
 
 export default function SecurityPage() {
-  const { token, user } = useAuth()
+  const { token, user, setProfile } = useAuth()
   const status = useResource(endpoint, token)
   const [password, setPassword] = useState('')
   const [code, setCode] = useState('')
@@ -28,6 +28,7 @@ export default function SecurityPage() {
     try {
       const result = await api(endpoint + '/' + action, { method: 'POST', token, body: { password, code: needsCode ? code : undefined } })
       if (action === 'setup') { setKey(result.sharedKey); return }
+      setProfile((profile) => profile ? { ...profile, twoFactorEnabled: action === 'enable' } : profile)
       setRecovery(result?.recoveryCodes || [])
       setSuccess(enabled ? 'Đã tắt xác thực hai bước.' : 'Đã bật xác thực hai bước. Hãy lưu các mã khôi phục bên dưới.')
       setPassword(''); setCode(''); setKey(''); status.refresh()
