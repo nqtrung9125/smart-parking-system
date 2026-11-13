@@ -1,16 +1,12 @@
-# React + Vite
+# Smart Parking frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Giao diện React + Vite của dự án Smart Parking. Chạy từ thư mục này:
 
-Currently, two official plugins are available:
+```powershell
+npm ci
+npm run dev
+```
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Mở `http://localhost:5173`. API ASP.NET Core cần chạy tại `http://localhost:5181`. Nếu dùng cổng khác, tạo `frontend/.env` với `VITE_API_BASE_URL=http://localhost:PORT`; file `.env` không được commit. Chạy `npm run lint` và `npm run build` trước khi đưa thay đổi lên GitHub.
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+Các trang gồm trang chủ, sơ đồ bãi xe, đăng nhập/đăng ký, xe, đặt chỗ, lịch sử, nhận/trả xe và khu vực quản trị. Mọi thao tác ghi dữ liệu đều gọi API; quyền truy cập được kiểm tra lại ở backend.

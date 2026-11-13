@@ -1,10 +1,10 @@
 # Smart Parking System
 
-Backend ASP.NET Core Web API (.NET 10) và PostgreSQL cho bài tập lớn Lập trình web nâng cao. Frontend React sẽ được thêm ở giai đoạn tiếp theo.
+Ứng dụng quản lý bãi đỗ xe cho bài tập lớn Lập trình web nâng cao: ASP.NET Core Web API (.NET 10), React + Vite và PostgreSQL trong Docker.
 
 ## Chạy trên máy mới
 
-1. Cài .NET SDK 10 và Docker Desktop.
+1. Cài .NET SDK 10, Node.js 20.19+ hoặc 22.12+ và Docker Desktop.
 2. Tạo `smart-parking-db/.env` theo các biến `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` của `smart-parking-db/compose.yaml`. Không commit file `.env`.
 3. Trong `smart-parking-db`, chạy `docker compose up -d`.
 4. Trong thư mục `backend/Parking.Api`, đặt connection string bằng User Secrets:
@@ -15,16 +15,39 @@ Backend ASP.NET Core Web API (.NET 10) và PostgreSQL cho bài tập lớn Lập
    dotnet user-secrets set "BootstrapAdmin:Password" "USE_A_STRONG_PASSWORD"
    ```
 
-5. Tại thư mục gốc, chạy:
+5. Tại thư mục gốc, khôi phục công cụ và cập nhật cơ sở dữ liệu:
 
    ```powershell
    dotnet tool restore
    $env:ASPNETCORE_ENVIRONMENT = "Development"
    dotnet tool run dotnet-ef database update --project backend/Parking.Api --startup-project backend/Parking.Api
-   dotnet run --project backend/Parking.Api
    ```
 
-Visual Studio 2026 có thể mở `backend/Parking.Api/Parking.Api.csproj`. Khi chạy bằng profile `https`, API ở `https://localhost:7171`; profile `http` ở `http://localhost:5181`. Cần tin cậy chứng chỉ phát triển với `dotnet dev-certs https --trust` nếu trình duyệt báo lỗi HTTPS.
+6. Mở hai terminal ở thư mục gốc và chạy API cùng React:
+
+   ```powershell
+   $env:ASPNETCORE_ENVIRONMENT = "Development"
+   dotnet run --project backend/Parking.Api --launch-profile http
+   ```
+
+   ```powershell
+   cd frontend
+   npm ci
+   npm run dev
+   ```
+
+   Mở `http://localhost:5173`. API dùng `http://localhost:5181`. Visual Studio 2026 có thể mở `backend/Parking.Api/Parking.Api.csproj` và chọn profile `http`. Nếu chạy profile `https`, API ở `https://localhost:7171`; đổi `VITE_API_BASE_URL` tương ứng và tin cậy chứng chỉ phát triển bằng `dotnet dev-certs https --trust`.
+
+## Giao diện
+
+| Vai trò | Trang |
+| --- | --- |
+| Mọi người | Trang chủ, chi tiết bãi xe và sơ đồ trạng thái, đăng ký, đăng nhập |
+| Khách hàng | Xe của tôi, đặt chỗ, lịch sử gửi xe |
+| Nhân viên | Nhận xe, trả xe và ghi nhận thanh toán tiền mặt |
+| Quản trị | Dashboard, quản lý bãi xe, chỗ đỗ, tài khoản nhân viên |
+
+Đăng nhập dùng Identity bearer token lưu trong `sessionStorage` của tab trình duyệt. Frontend gọi `/api/me` để lấy quyền; API vẫn kiểm tra quyền trên từng endpoint. Trước buổi demo, tạo tài khoản Admin bằng User Secrets ở bước 4 rồi khởi động API; người dùng thường có thể đăng ký từ trang web. Giao diện frontend không chứa mật khẩu mẫu.
 
 ## API chính
 
@@ -53,4 +76,4 @@ Loại chỗ/xe: `1` = xe máy, `2` = ô tô. Thời gian đặt chỗ là UTC. 
 
 `tests/smoke.ps1` chạy kiểm thử API với một database riêng đã được migration. Cần đặt hai biến môi trường `PARKING_TEST_ADMIN_EMAIL` và `PARKING_TEST_ADMIN_PASSWORD` của tài khoản Admin trong database kiểm thử, rồi chạy API tại `http://127.0.0.1:5188` và `./tests/smoke.ps1`. Bài kiểm thử tạo dữ liệu mẫu; không chạy vào database thật.
 
-Mã nguồn không chứa mật khẩu PostgreSQL hay Admin. Chức năng OTP qua SMS/email và frontend React chưa được triển khai.
+Mã nguồn không chứa mật khẩu PostgreSQL hay Admin. OTP qua SMS/email, cổng thanh toán thật, dự đoán AI và sơ đồ 3D là các hướng mở rộng, hiện chưa triển khai.
