@@ -108,6 +108,9 @@ $end = [DateTime]::UtcNow.AddHours(1).ToString('O')
 $request = @{ vehicleId = $vehicle.Data.id; parkingSpotId = $spot.Data.id; startUtc = $start; endUtc = $end }
 $reservation = CallApi 'POST' '/api/reservations' $request $customerToken
 Expect $reservation.Status 201 'customer reserve spot'
+$myParkedPath = '/api/parking-sessions/mine/active'
+Expect (CallApi 'GET' $myParkedPath).Status 401 'parked vehicles require login'
+Expect @((CallApi 'GET' $myParkedPath $null $customerToken).Data).Count 0 'reservation alone does not locate a parked vehicle'
 Expect (CallApi 'GET' "/api/reservations/active?plate=T$suffix" $null $staffToken).Status 200 'staff searches reservation'
 Expect (CallApi 'POST' '/api/reservations' $request $customerToken).Status 409 'overlap denied'
 Expect (CallApi 'POST' "/api/reservations/$($reservation.Data.id)/cancel" $null $customerToken).Status 204 'customer cancel reservation'
@@ -117,6 +120,16 @@ $checkIn = CallApi 'POST' '/api/parking-sessions/check-in' @{
     vehicleId = $vehicle.Data.id; parkingSpotId = $spot.Data.id
 } $staffToken
 Expect $checkIn.Status 201 'staff check in'
+$parked = CallApi 'GET' $myParkedPath $null $customerToken
+Expect $parked.Status 200 'owner locates parked vehicle'
+Expect @($parked.Data).Count 1 'one parked vehicle'
+Expect $parked.Data[0].id $checkIn.Data.id 'position comes from active check-in'
+Expect $parked.Data[0].parkingSpotId $spot.Data.id 'actual parking spot ID returned'
+Expect $parked.Data[0].spotCode 'M01' 'actual parking code returned'
+Expect $parked.Data[0].lotId $lot.Data.id 'actual lot ID returned'
+Expect $parked.Data[0].lotName $lot.Data.name 'actual lot name returned'
+Expect $parked.Data[0].plateNumber $vehicle.Data.plateNumber 'owner sees own plate'
+Expect @((CallApi 'GET' $myParkedPath $null $adminToken).Data).Count 0 'personal location does not return another account vehicle'
 $occupiedMap = CallApi 'GET' "/api/parking-spots/map?parkingLotId=$($lot.Data.id)"
 if ($occupiedMap.Data[0].status -ne 'Occupied') { throw 'Spot map did not show Occupied' }
 Write-Output 'PASS occupied spot status'
@@ -126,6 +139,7 @@ Expect (CallApi 'POST' '/api/parking-sessions/check-in' @{
 Expect (CallApi 'GET' '/api/parking-sessions/mine' $null $customerToken).Status 200 'customer session history'
 $checkOut = CallApi 'POST' "/api/parking-sessions/$($checkIn.Data.id)/check-out" $null $staffToken
 Expect $checkOut.Status 200 'staff check out'
+Expect @((CallApi 'GET' $myParkedPath $null $customerToken).Data).Count 0 'location removed once checked out'
 Expect (CallApi 'GET' '/api/parking-sessions/unpaid' $null $staffToken).Status 200 'staff lists unpaid sessions'
 if ($checkOut.Data.fee -ne 5000) { throw "Unexpected fee: $($checkOut.Data.fee)" }
 Write-Output 'PASS one-hour motorbike fee (5000)'

@@ -86,10 +86,10 @@ export function buildParkingWorld(scene, layout) {
   for (let i = 0; i < 4; i++) block(world, 0xd56154, .25, .105, .145, -1.35 + i * .83, .92, length / 2 + .4)
 
   const vehicleColors = [0xc0c6cb, 0x335e83, 0x7a4948, 0x58636d, 0xf2efe6, 0x637f76]
-  function vehicle(spot, x, z) {
+  function vehicle(spot, x, z, highlighted = false) {
     const car = spot.type === 2
     const w = car ? 1.69 : .63, d = car ? 3.78 : 1.9
-    const paint = material(vehicleColors[spot.id % vehicleColors.length], .28, .23)
+    const paint = material(highlighted ? 0x04bfa5 : vehicleColors[spot.id % vehicleColors.length], .28, .23)
     const glass = material(0x324b5c, .21, .24)
     const rubber = material(0x25292d)
     const group = new T.Group()
@@ -115,6 +115,7 @@ export function buildParkingWorld(scene, layout) {
       block(group, 0xe4e4d7, .28, .11, .06, 0, .62, .93, true)
       for (const axle of [-1, 1]) mesh(group, wheel, rubber, .13, .26, .26, 0, .25, axle * .69)
     }
+    return group
   }
 
   const targetMap = new Map()
@@ -147,22 +148,23 @@ export function buildParkingWorld(scene, layout) {
       for (let i = -1; i <= 1; i++) block(layer, 0xd29d4b, .17, .25, .17, x + i * .58, .12, z + .55, true)
     }
     world.add(layer)
-    if (spot.status === 'Occupied') vehicle(spot, x, z)
-    stateLayers.push({ spot, layer, x, z })
+    const parked = spot.status === 'Occupied' ? vehicle(spot, x, z) : null
+    stateLayers.push({ spot, layer, x, z, parked })
   }
-  const outline = new T.Group()
-  for (const side of [-1, 1]) {
-    block(outline, 0xffcf68, .13, .035, depth + .12, side * (pitch - .10) / 2, .046, 0)
-    block(outline, 0xffcf68, pitch + .035, .035, .13, 0, .046, side * depth / 2)
-  }
-  world.add(outline)
+  // Keep one marker per vehicle type and move it as the selection changes.
+  const markers = [1, 2].map((type) => vehicle({ id: 0, type }, 0, 0, true))
   return {
     targets: [...targetMap.values()],
     showSelection(id, filter) {
       const selected = stateLayers.find((item) => item.spot.id === id)
-      outline.visible = !!selected
-      if (selected) outline.position.set(selected.x, 0, selected.z)
-      for (const item of stateLayers) item.layer.visible = !filter || item.spot.type === filter
+      markers.forEach((marker, index) => {
+        marker.visible = selected?.spot.type === index + 1
+        if (marker.visible) marker.position.set(selected.x, .01, selected.z)
+      })
+      for (const item of stateLayers) {
+        item.layer.visible = !filter || item.spot.type === filter
+        if (item.parked) item.parked.visible = item.layer.visible && item !== selected
+      }
     },
     dispose() {
       const geometries = new Set()

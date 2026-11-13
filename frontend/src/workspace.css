@@ -1,6 +1,16 @@
 .workspace-shell { min-height: 100vh; background: #f4f7f6; }
 .booking-grid { grid-template-columns: minmax(280px, .85fr) minmax(0, 1.15fr); }
 .booking-preview { min-width: 0; }
+.parked-options { display: grid; gap: 7px; }
+.parked-options .parked-choice { flex-wrap: wrap; align-items: center; margin: 0; column-gap: 12px; row-gap: 5px; }
+.parked-choice span { color: #405c6d; font-size: 12px; font-weight: 550; }
+.parked-choice[aria-pressed=true] { border-color: #168e7f; background: #e6f6f0; }
+.parked-details { display: grid; gap: 12px; margin: 20px 0 15px; }
+.parked-details > div { display: grid; grid-template-columns: 6em minmax(0, 1fr); align-items: baseline; gap: 10px; }
+.parked-details dt { color: #526478; font-size: 13px; }
+.parked-details dd { margin: 0; color: #152840; font-weight: 700; overflow-wrap: anywhere; }
+.parked-details small { display: block; color: #526478; font-weight: 400; margin-top: 4px; }
+.parked-details .parked-code { color: #087b70; font-size: 24px; }
 .parking-plan { display: block; width: 100%; height: auto; max-height: 380px; margin-inline: auto; border-radius: 10px; background: #293743; }
 .booking-preview .spot-scene-preview { height: clamp(255px, 36vw, 390px); min-height: 0; }
 .preview-caption { margin-top: 13px; display: flex; align-items: center; gap: 7px 9px; flex-wrap: wrap; color: #44596c; font-size: 13px; }

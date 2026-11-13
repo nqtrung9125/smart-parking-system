@@ -35,6 +35,26 @@ public sealed class ParkingSessionsController(ParkingDbContext db) : ControllerB
             s.ParkingSpot.Code, s.CheckInUtc })
         .ToListAsync(ct));
 
+    [HttpGet("mine/active")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> MyParkedVehicles(CancellationToken ct)
+    {
+        var ownerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (ownerId is null) return Unauthorized();
+
+        return Ok(await db.ParkingSessions.AsNoTracking()
+            .Where(s => s.Vehicle.OwnerId == ownerId && s.CheckOutUtc == null)
+            .OrderByDescending(s => s.CheckInUtc).ThenByDescending(s => s.Id)
+            .Select(s => new
+            {
+                s.Id, s.Vehicle.PlateNumber, VehicleType = s.Vehicle.Type, s.CheckInUtc,
+                s.ParkingSpotId, SpotCode = s.ParkingSpot.Code,
+                LotId = s.ParkingSpot.ParkingLotId, LotName = s.ParkingSpot.ParkingLot.Name,
+                LotAddress = s.ParkingSpot.ParkingLot.Address
+            })
+            .ToListAsync(ct));
+    }
+
     [HttpGet("unpaid")]
     [Authorize(Roles = "Admin,Staff")]
     public async Task<IActionResult> Unpaid(CancellationToken ct) => Ok(await db.ParkingSessions.AsNoTracking()

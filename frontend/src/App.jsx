@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { useAuth } from './auth/useAuth'
 import ParkingArtwork from './components/ParkingArtwork'
-import AccountLink from './components/AccountLink'
+import { SiteHeader, SiteFooter } from './components/SiteChrome'
 import { useResource } from './lib/useResource'
 import './App.css'
 
@@ -19,12 +18,7 @@ export function Icon({ name, size = 20 }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{shapes[name]}</svg>
 }
 
-export function Brand() {
-  return <Link className="parking-brand" to="/" aria-label="Smart Parking, trang chủ"><span className="parking-mark">P</span><span>Smart<span>Parking</span></span></Link>
-}
-
 export default function App() {
-  const { user } = useAuth()
   const lots = useResource('/api/parking-lots')
   const spots = useResource('/api/parking-spots')
   const [query, setQuery] = useState('')
@@ -39,11 +33,7 @@ export default function App() {
   const busy = lots.loading || spots.loading
 
   return <div className="parking-home">
-    <header className="landing-header"><div className="landing-container landing-nav">
-      <Brand />
-      <nav aria-label="Điều hướng chính"><a className="nav-selected" href="#lots">Khám phá</a><a href="#guide">Cách hoạt động</a></nav>
-      {user ? <AccountLink user={user} /> : <Link className="landing-button nav-button" to="/login">Đăng nhập <Icon name="arrow" size={16} /></Link>}
-    </div></header>
+    <SiteHeader />
     <main className="landing-container">
       <section className="landing-hero" aria-labelledby="hero-title">
         <div className="hero-copy-new">
@@ -75,6 +65,6 @@ export default function App() {
         {[['search', 'Chọn bãi', 'Tìm theo tên, địa chỉ hoặc loại xe.'], ['map', 'Xem sơ đồ', 'Kiểm tra trạng thái từng vị trí đỗ.'], ['clock', 'Đặt chỗ', 'Chọn xe, vị trí và giờ bạn dự kiến đến.']].map(([icon, title, body], i) => <div key={title}><span className="metric-icon"><Icon name={icon} /></span><div><h3>{i + 1}. {title}</h3><p>{body}</p></div></div>)}
       </div></section>
     </main>
-    <footer className="landing-container landing-footer"><Brand /><span>Hệ thống quản lý bãi đỗ xe</span><a href="#root">Về đầu trang ↑</a></footer>
+    <SiteFooter />
   </div>
 }

@@ -1,4 +1,5 @@
-import { Route, Routes } from 'react-router'
+import { useEffect } from 'react'
+import { Route, Routes, useLocation } from 'react-router'
 import Home from './App'
 import { Layout, RequireAuth } from './components/Layout'
 import AuthPage from './pages/AuthPage'
@@ -10,8 +11,16 @@ import { StaffCheckInPage, StaffCheckOutPage } from './pages/StaffPages'
 import { AdminDashboardPage, AdminManagePage } from './pages/AdminPages'
 import SecurityPage from './pages/SecurityPage'
 import AccountPage from './pages/AccountPage'
+import ParkedVehiclesPage from './pages/ParkedVehiclesPage'
 
 export default function AppRouter() {
+  const { pathname, hash } = useLocation()
+  useEffect(() => {
+    const anchor = hash && document.getElementById(hash.slice(1))
+    if (anchor) anchor.scrollIntoView()
+    else window.scrollTo({ top: 0, behavior: 'instant' })
+  }, [pathname, hash])
+
   return <Routes>
     <Route path="/" element={<Home />} />
     <Route element={<Layout />}>
@@ -22,6 +31,7 @@ export default function AppRouter() {
       <Route path="/account" element={<RequireAuth><AccountPage /></RequireAuth>} />
       <Route path="/vehicles" element={<RequireAuth><VehiclesPage /></RequireAuth>} />
       <Route path="/reservations" element={<RequireAuth><ReservationsPage /></RequireAuth>} />
+      <Route path="/parked" element={<RequireAuth><ParkedVehiclesPage /></RequireAuth>} />
       <Route path="/history" element={<RequireAuth><HistoryPage /></RequireAuth>} />
       <Route path="/staff/check-in" element={<RequireAuth roles={['Admin', 'Staff']}><StaffCheckInPage /></RequireAuth>} />
       <Route path="/staff/check-out" element={<RequireAuth roles={['Admin', 'Staff']}><StaffCheckOutPage /></RequireAuth>} />

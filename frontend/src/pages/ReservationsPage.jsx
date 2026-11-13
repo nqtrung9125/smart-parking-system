@@ -47,7 +47,7 @@ export default function ReservationsPage() {
     catch (cause) { setError(cause.message) }
   }
 
-  return <main className="page-wrap"><PageHeader eyebrow="ĐẶT CHỖ" title="Chọn chỗ đỗ trước khi đến" description="Chọn xe và khung giờ. Hệ thống sẽ kiểm tra trùng lịch khi bạn xác nhận." />
+  return <main className="page-wrap"><PageHeader eyebrow="ĐẶT CHỖ" title="Chọn chỗ đỗ trước khi đến" description="Chọn xe và khung giờ. Hệ thống sẽ kiểm tra trùng lịch khi bạn xác nhận." actions={<Link className="button light-button" to="/parked">Tìm xe đang gửi →</Link>} />
     <Notice error={error || vehicles.error || lots.error || spots.error || reservations.error} success={message} />
     <div className="two-column booking-grid"><form className="panel" onSubmit={create}><h2>Đặt chỗ mới</h2>
       {!vehicles.loading && !vehicles.data?.length && <p className="helper-text">Bạn cần <Link to="/vehicles">đăng ký xe</Link> trước khi đặt chỗ.</p>}

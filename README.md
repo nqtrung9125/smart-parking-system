@@ -57,13 +57,13 @@ Kịch bản trình bày: tìm **Bạch Đằng** → mở chi tiết → chọn
 | Vai trò | Trang |
 | --- | --- |
 | Mọi người | Trang chủ, tìm bãi, sơ đồ 2D/3D, dự báo chỗ trống, đăng ký và đăng nhập |
-| Khách hàng | Hồ sơ tài khoản, xe của tôi, đặt chỗ có xem trước 2D/3D, lịch sử và bảo mật |
+| Khách hàng | Hồ sơ, xe của tôi, đặt chỗ, tìm xe đang gửi trên sơ đồ 2D/3D, lịch sử và bảo mật |
 | Nhân viên | Nhận xe, trả xe và ghi nhận thanh toán tiền mặt hoặc chuyển khoản |
 | Quản trị | Dashboard, quản lý bãi xe, chỗ đỗ, tài khoản nhân viên |
 
 Đăng nhập dùng Identity bearer token, hết hạn sau 30 phút, lưu trong `sessionStorage` của tab trình duyệt. Frontend gọi `/api/me` để lấy quyền; API kiểm tra quyền trên từng endpoint. Để bật OTP, đăng nhập và mở **Bảo mật**, xác nhận mật khẩu, quét QR trong ứng dụng xác thực rồi nhập mã 6 số. Cất mã khôi phục trước khi rời trang. Mỗi mã khôi phục chỉ dùng được một lần. OTP không cần dịch vụ SMS hoặc email.
 
-Sơ đồ 3D sắp xếp vị trí từ mã chỗ. Dự báo dùng k láng giềng gần nhất có trọng số để ước tính chỗ trống 12 giờ tới. API ưu tiên lịch sử vận hành nếu có ít nhất 20 lượt hoàn tất và trải dài 14 ngày, giữ 3 ngày gần nhất để kiểm tra. Khi chưa đủ lịch sử, 8 bãi Đà Nẵng có thể dùng CSV và biểu đồ ghi rõ nguồn mô phỏng. Dự báo không tính các lượt đặt trước trong tương lai.
+Sơ đồ 3D sắp xếp vị trí từ mã chỗ. Xe màu ngọc lam đánh dấu ô được chọn hoặc xe của khách trong mục **Xe đang gửi**. Dự báo dùng k láng giềng gần nhất có trọng số cho 12 giờ tiếp theo, 7 ngày đầy đủ tiếp theo hoặc 4 tuần đầy đủ tiếp theo (thứ Hai đến Chủ Nhật, giờ Việt Nam). Chế độ ngày và tuần hiển thị trung bình và mức thấp nhất. Mô hình dựa trên thứ và giờ nên các tuần có thể giống nhau. API ưu tiên lịch sử vận hành nếu có ít nhất 20 lượt hoàn tất và trải dài 14 ngày, giữ 3 ngày gần nhất để kiểm tra. Khi chưa đủ lịch sử, 8 bãi Đà Nẵng dùng CSV và biểu đồ ghi rõ nguồn mô phỏng. Dự báo không tính lịch đặt sắp tới.
 
 ## Chuyển khoản QR
 
@@ -88,13 +88,14 @@ Khởi động lại API. Nhân viên mở **Trả xe & thanh toán**, chọn **
 | Đặt chỗ | `GET /api/reservations/mine`, `POST /api/reservations`, `POST /{id}/cancel` | Đã đăng nhập |
 | Gửi xe | `POST /api/parking-sessions/check-in`, `POST /{id}/check-out`, `GET /active` | Admin/Staff |
 | Lịch sử gửi xe | `GET /api/parking-sessions/mine` | Đã đăng nhập |
+| Tìm xe đang gửi | `GET /api/parking-sessions/mine/active` | Chủ xe, từ lúc nhân viên nhận xe đến khi xác nhận xe ra |
 | Thanh toán | `POST /api/payments/parking-session/{id}` | Admin/Staff |
 | Thống kê | `GET /api/dashboard/summary` | Admin/Staff |
 | Nhân viên | `POST /api/admin/staff`, `DELETE /api/admin/staff/{id}` | Admin |
 | Hồ sơ tài khoản | `GET /api/me`, `PUT /api/me` (tên hiển thị, số liên hệ) | Chủ tài khoản |
 | Tra xe và lịch đặt | `GET /api/vehicles/search?plate=`, `GET /api/reservations/active?plate=` | Admin/Staff |
 | Sơ đồ trạng thái | `GET /api/parking-spots/map?parkingLotId=` | Công khai |
-| Dự báo | `GET /api/parking-lots/{id}/forecast?type=` | Công khai |
+| Dự báo | `GET /api/parking-lots/{id}/forecast?period=hour\|day\|week&type=` | Công khai |
 | OTP | `GET /api/security/authenticator`; POST `/setup`, `/enable`, `/disable` | Đã đăng nhập |
 | Thông tin VietQR | `GET /api/payments/parking-session/{id}/transfer` | Admin/Staff |
 | Thanh toán chưa thu | `GET /api/parking-sessions/unpaid` | Admin/Staff |
