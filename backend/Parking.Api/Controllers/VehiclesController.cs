@@ -25,6 +25,20 @@ public sealed class VehiclesController(ParkingDbContext db) : ControllerBase
         return Ok(vehicles);
     }
 
+    [HttpGet("search")]
+    [Authorize(Roles = "Admin,Staff")]
+    public async Task<IActionResult> Search([FromQuery] string plate, CancellationToken ct)
+    {
+        var term = plate?.Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(term) || term.Length < 2) return BadRequest("Nhập ít nhất 2 ký tự biển số.");
+        return Ok(await db.Vehicles.AsNoTracking()
+            .Where(v => v.PlateNumber.Contains(term))
+            .OrderBy(v => v.PlateNumber)
+            .Take(20)
+            .Select(v => new VehicleResponse(v.Id, v.PlateNumber, v.Type))
+            .ToListAsync(ct));
+    }
+
     [HttpPost]
     public async Task<IActionResult> Create(CreateVehicleRequest request, CancellationToken ct)
     {

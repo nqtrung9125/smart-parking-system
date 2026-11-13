@@ -11,6 +11,13 @@ public sealed record AssignStaffRequest([Required, EmailAddress] string Email);
 [Route("api/admin/staff")]
 public sealed class StaffController(UserManager<IdentityUser> users) : ControllerBase
 {
+    [HttpGet]
+    public async Task<IActionResult> List()
+    {
+        var staff = await users.GetUsersInRoleAsync("Staff");
+        return Ok(staff.OrderBy(u => u.Email).Select(u => new { u.Id, u.Email }));
+    }
+
     [HttpPost]
     public async Task<IActionResult> Assign(AssignStaffRequest request)
     {

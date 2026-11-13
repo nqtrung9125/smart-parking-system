@@ -33,6 +33,7 @@ $adminLogin = CallApi 'POST' '/api/auth/login?useCookies=false' @{
 Expect $adminLogin.Status 200 'admin login'
 $adminToken = $adminLogin.Data.accessToken
 if (-not $adminToken) { throw 'Admin bearer token missing' }
+Expect (CallApi 'GET' '/api/me' $null $adminToken).Status 200 'admin profile'
 
 $suffix = [guid]::NewGuid().ToString('N').Substring(0, 8)
 $email = "smoke-$suffix@example.test"
@@ -42,6 +43,7 @@ $login = CallApi 'POST' '/api/auth/login?useCookies=false' @{ email = $email; pa
 Expect $login.Status 200 'customer login'
 $customerToken = $login.Data.accessToken
 if (-not $customerToken) { throw 'Customer bearer token missing' }
+Expect (CallApi 'GET' '/api/me' $null $customerToken).Status 200 'customer profile'
 
 Expect (CallApi 'POST' '/api/parking-lots' @{ name = 'Forbidden'; address = 'Forbidden' } $customerToken).Status 403 'customer cannot create lot'
 Expect (CallApi 'GET' '/api/dashboard/summary' $null $customerToken).Status 403 'customer cannot read dashboard'
@@ -49,6 +51,7 @@ Expect (CallApi 'GET' '/api/vehicles/mine').Status 401 'anonymous vehicles denie
 
 $assigned = CallApi 'POST' '/api/admin/staff' @{ email = $email } $adminToken
 Expect $assigned.Status 200 'admin assigns staff'
+Expect (CallApi 'GET' '/api/admin/staff' $null $adminToken).Status 200 'admin lists staff'
 Expect (CallApi 'POST' '/api/admin/staff' @{ email = $email } $customerToken).Status 403 'staff cannot assign staff'
 $staffLogin = CallApi 'POST' '/api/auth/login?useCookies=false' @{ email = $email; password = $password }
 Expect $staffLogin.Status 200 'staff login after role change'
@@ -60,6 +63,7 @@ $spot = CallApi 'POST' '/api/parking-spots' @{ parkingLotId = $lot.Data.id; code
 Expect $spot.Status 201 'admin create spot'
 $vehicle = CallApi 'POST' '/api/vehicles' @{ plateNumber = "T$suffix"; type = 1 } $customerToken
 Expect $vehicle.Status 201 'customer create vehicle'
+Expect (CallApi 'GET' "/api/vehicles/search?plate=T$suffix" $null $staffToken).Status 200 'staff searches plate'
 Expect (CallApi 'POST' '/api/vehicles' @{ plateNumber = "T$suffix"; type = 1 } $customerToken).Status 409 'duplicate plate denied'
 
 $start = [DateTime]::UtcNow.AddMinutes(2).ToString('O')
@@ -67,23 +71,32 @@ $end = [DateTime]::UtcNow.AddHours(1).ToString('O')
 $request = @{ vehicleId = $vehicle.Data.id; parkingSpotId = $spot.Data.id; startUtc = $start; endUtc = $end }
 $reservation = CallApi 'POST' '/api/reservations' $request $customerToken
 Expect $reservation.Status 201 'customer reserve spot'
+Expect (CallApi 'GET' "/api/reservations/active?plate=T$suffix" $null $staffToken).Status 200 'staff searches reservation'
 Expect (CallApi 'POST' '/api/reservations' $request $customerToken).Status 409 'overlap denied'
 Expect (CallApi 'POST' "/api/reservations/$($reservation.Data.id)/cancel" $null $customerToken).Status 204 'customer cancel reservation'
+Expect (CallApi 'GET' "/api/parking-spots/map?parkingLotId=$($lot.Data.id)").Status 200 'public spot map'
 
 $checkIn = CallApi 'POST' '/api/parking-sessions/check-in' @{
     vehicleId = $vehicle.Data.id; parkingSpotId = $spot.Data.id
 } $staffToken
 Expect $checkIn.Status 201 'staff check in'
+$occupiedMap = CallApi 'GET' "/api/parking-spots/map?parkingLotId=$($lot.Data.id)"
+if ($occupiedMap.Data[0].status -ne 'Occupied') { throw 'Spot map did not show Occupied' }
+Write-Output 'PASS occupied spot status'
 Expect (CallApi 'POST' '/api/parking-sessions/check-in' @{
     vehicleId = $vehicle.Data.id; parkingSpotId = $spot.Data.id
 } $staffToken).Status 409 'duplicate active session denied'
 Expect (CallApi 'GET' '/api/parking-sessions/mine' $null $customerToken).Status 200 'customer session history'
 $checkOut = CallApi 'POST' "/api/parking-sessions/$($checkIn.Data.id)/check-out" $null $staffToken
 Expect $checkOut.Status 200 'staff check out'
+Expect (CallApi 'GET' '/api/parking-sessions/unpaid' $null $staffToken).Status 200 'staff lists unpaid sessions'
 if ($checkOut.Data.fee -ne 5000) { throw "Unexpected fee: $($checkOut.Data.fee)" }
 Write-Output 'PASS one-hour motorbike fee (5000)'
 $pay = CallApi 'POST' "/api/payments/parking-session/$($checkIn.Data.id)" @{ method = 1 } $staffToken
 Expect $pay.Status 201 'staff record cash payment'
+$unpaidAfterPay = CallApi 'GET' '/api/parking-sessions/unpaid' $null $staffToken
+if (@($unpaidAfterPay.Data).Count -ne 0) { throw 'Paid session still appears as unpaid' }
+Write-Output 'PASS paid session removed from unpaid list'
 Expect (CallApi 'POST' "/api/payments/parking-session/$($checkIn.Data.id)" @{ method = 1 } $staffToken).Status 409 'duplicate payment denied'
 $summary = CallApi 'GET' '/api/dashboard/summary' $null $adminToken
 Expect $summary.Status 200 'admin dashboard'
