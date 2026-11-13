@@ -40,10 +40,14 @@ Visual Studio 2026 có thể mở `backend/Parking.Api/Parking.Api.csproj`. Khi 
 | Thanh toán | `POST /api/payments/parking-session/{id}` | Admin/Staff |
 | Thống kê | `GET /api/dashboard/summary` | Admin/Staff |
 | Nhân viên | `POST /api/admin/staff`, `DELETE /api/admin/staff/{id}` | Admin |
+| Hồ sơ đăng nhập | `GET /api/me` | Đã đăng nhập |
+| Tra xe và lịch đặt | `GET /api/vehicles/search?plate=`, `GET /api/reservations/active?plate=` | Admin/Staff |
+| Sơ đồ trạng thái | `GET /api/parking-spots/map?parkingLotId=` | Công khai |
+| Thanh toán chưa thu | `GET /api/parking-sessions/unpaid` | Admin/Staff |
 
 `/api/auth/login?useCookies=false` trả về Identity bearer token; gửi token trong `Authorization: Bearer ...`. Đây là token của ASP.NET Identity, **không phải JWT**. Tài khoản đăng ký thường không tự có quyền Admin hoặc Staff. Admin có thể gán hoặc thu hồi quyền Staff; người dùng cần đăng nhập lại để token nhận quyền mới. Tài khoản Admin ban đầu chỉ được tạo trong môi trường Development qua User Secrets.
 
-Loại chỗ/xe: `1` = xe máy, `2` = ô tô. Thời gian đặt chỗ là UTC. Phí mẫu: xe máy 5.000 đồng/giờ, ô tô 15.000 đồng/giờ, làm tròn lên tối thiểu một giờ. Thanh toán chỉ là ghi nhận tiền mặt hoặc thẻ **mô phỏng**, chưa kết nối cổng thanh toán. CORS hiện cho phép React Vite tại `http://localhost:5173`.
+Loại chỗ/xe: `1` = xe máy, `2` = ô tô. Thời gian đặt chỗ là UTC. Sơ đồ trả trạng thái `Available`, `Occupied`, `Reserved`, `Inactive` tại thời điểm gọi API. Phí mẫu: xe máy 5.000 đồng/giờ, ô tô 15.000 đồng/giờ, làm tròn lên tối thiểu một giờ. Thanh toán chỉ là ghi nhận tiền mặt hoặc thẻ **mô phỏng**, chưa kết nối cổng thanh toán. CORS hiện cho phép React Vite tại `http://localhost:5173`.
 
 ## Kiểm thử
 

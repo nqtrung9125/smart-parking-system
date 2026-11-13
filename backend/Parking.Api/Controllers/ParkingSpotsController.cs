@@ -30,6 +30,28 @@ public class ParkingSpotsController : ControllerBase
         return Ok(spots);
     }
 
+    [HttpGet("map")]
+    public async Task<IActionResult> Map([FromQuery] int parkingLotId, CancellationToken ct)
+    {
+        if (!await _db.ParkingLots.AnyAsync(l => l.Id == parkingLotId, ct)) return NotFound();
+        var now = DateTime.UtcNow;
+        var spots = await _db.ParkingSpots.AsNoTracking()
+            .Where(s => s.ParkingLotId == parkingLotId)
+            .OrderBy(s => s.Code)
+            .Select(s => new
+            {
+                s.Id, s.ParkingLotId, s.Code, s.Type, s.IsActive,
+                Occupied = _db.ParkingSessions.Any(p => p.ParkingSpotId == s.Id && p.CheckOutUtc == null),
+                Reserved = _db.Reservations.Any(r => r.ParkingSpotId == s.Id &&
+                    r.Status == ReservationStatus.Active && r.StartUtc <= now && r.EndUtc >= now)
+            }).ToListAsync(ct);
+        return Ok(spots.Select(s => new
+        {
+            s.Id, s.ParkingLotId, s.Code, s.Type,
+            Status = !s.IsActive ? "Inactive" : s.Occupied ? "Occupied" : s.Reserved ? "Reserved" : "Available"
+        }));
+    }
+
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id, CancellationToken ct)
     {
@@ -42,7 +64,7 @@ public class ParkingSpotsController : ControllerBase
         return spot is null ? NotFound() : Ok(spot);
     }
     
- [Authorize(Roles = "Admin,Staff")]
+    [Authorize(Roles = "Admin,Staff")]
     [HttpPost]
     public async Task<IActionResult> Create(
         CreateParkingSpotRequest request, CancellationToken ct)

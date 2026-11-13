@@ -35,6 +35,16 @@ public sealed class ParkingSessionsController(ParkingDbContext db) : ControllerB
             s.ParkingSpot.Code, s.CheckInUtc })
         .ToListAsync(ct));
 
+    [HttpGet("unpaid")]
+    [Authorize(Roles = "Admin,Staff")]
+    public async Task<IActionResult> Unpaid(CancellationToken ct) => Ok(await db.ParkingSessions.AsNoTracking()
+        .Where(s => s.CheckOutUtc != null && s.Fee != null && !db.Payments.Any(p => p.ParkingSessionId == s.Id))
+        .OrderByDescending(s => s.CheckOutUtc)
+        .Take(100)
+        .Select(s => new { s.Id, s.Vehicle.PlateNumber, s.ParkingSpot.Code,
+            s.CheckInUtc, s.CheckOutUtc, s.Fee })
+        .ToListAsync(ct));
+
     [HttpPost("check-in")]
     [Authorize(Roles = "Admin,Staff")]
     public async Task<IActionResult> CheckIn(CheckInRequest request, CancellationToken ct)

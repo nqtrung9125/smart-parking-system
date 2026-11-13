@@ -14,6 +14,20 @@ namespace Parking.Api.Controllers;
 [Route("api/reservations")]
 public sealed class ReservationsController(ParkingDbContext db) : ControllerBase
 {
+    [HttpGet("active")]
+    [Authorize(Roles = "Admin,Staff")]
+    public async Task<IActionResult> Active([FromQuery] string plate, CancellationToken ct)
+    {
+        var term = plate?.Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(term) || term.Length < 2) return BadRequest("Nhập ít nhất 2 ký tự biển số.");
+        var now = DateTime.UtcNow;
+        return Ok(await db.Reservations.AsNoTracking()
+            .Where(r => r.Status == ReservationStatus.Active && r.EndUtc >= now && r.Vehicle.PlateNumber.Contains(term))
+            .OrderBy(r => r.StartUtc).Take(20)
+            .Select(r => new { r.Id, r.VehicleId, r.Vehicle.PlateNumber, r.ParkingSpotId,
+                r.ParkingSpot.Code, r.StartUtc, r.EndUtc }).ToListAsync(ct));
+    }
+
     [HttpGet("mine")]
     public async Task<IActionResult> Mine(CancellationToken ct)
     {
