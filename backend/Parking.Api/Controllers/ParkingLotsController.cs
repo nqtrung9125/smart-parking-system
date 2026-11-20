@@ -27,6 +27,14 @@ public class ParkingLotsController : ControllerBase
 
         return Ok(lots);
     }
+
+    [HttpGet("assigned")]
+    [Authorize(Roles = "Admin,Staff")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> Assigned(CancellationToken ct) => Ok(await _db.OperationalLots(User)
+        .AsNoTracking().OrderBy(lot => lot.Name).ThenBy(lot => lot.Id)
+        .Select(lot => new { lot.Id, lot.Name, lot.Address }).ToListAsync(ct));
+
     [HttpGet("{id:int}")]
     public async Task<ActionResult<ParkingLot>> GetById(int id, CancellationToken ct)
     {

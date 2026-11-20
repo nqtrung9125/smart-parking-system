@@ -31,6 +31,8 @@ public sealed class VehiclesController(ParkingDbContext db) : ControllerBase
     {
         var term = plate?.Trim().ToUpperInvariant();
         if (string.IsNullOrWhiteSpace(term) || term.Length < 2) return BadRequest("Nhập ít nhất 2 ký tự biển số.");
+        if (!User.IsInRole("Admin") && !await db.OperationalLots(User).AnyAsync(ct))
+            return Ok(Array.Empty<VehicleResponse>());
         return Ok(await db.Vehicles.AsNoTracking()
             .Where(v => v.PlateNumber.Contains(term))
             .OrderBy(v => v.PlateNumber)
@@ -66,7 +68,8 @@ public sealed class VehiclesController(ParkingDbContext db) : ControllerBase
     public async Task<IActionResult> GetById(int id, CancellationToken ct)
     {
         var ownerId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-        var canManage = User.IsInRole("Admin") || User.IsInRole("Staff");
+        var canManage = User.IsInRole("Admin") ||
+            (User.IsInRole("Staff") && await db.OperationalLots(User).AnyAsync(ct));
         var vehicle = await db.Vehicles.AsNoTracking()
             .Where(v => v.Id == id && (v.OwnerId == ownerId || canManage))
             .Select(v => new VehicleResponse(v.Id, v.PlateNumber, v.Type))

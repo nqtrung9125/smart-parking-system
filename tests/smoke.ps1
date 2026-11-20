@@ -98,23 +98,82 @@ $lot = CallApi 'POST' '/api/parking-lots' @{ name = "Smoke lot $suffix"; address
 Expect $lot.Status 201 'admin create lot'
 $spot = CallApi 'POST' '/api/parking-spots' @{ parkingLotId = $lot.Data.id; code = 'M01'; type = 1 } $adminToken
 Expect $spot.Status 201 'admin create spot'
+$otherLot = CallApi 'POST' '/api/parking-lots' @{ name = "Other lot $suffix"; address = 'Isolated test DB' } $adminToken
+Expect $otherLot.Status 201 'admin creates a second lot'
+$otherSpot = CallApi 'POST' '/api/parking-spots' @{ parkingLotId = $otherLot.Data.id; code = 'M02'; type = 1 } $adminToken
+Expect $otherSpot.Status 201 'admin can create a spot at any lot'
+$assignedPath = '/api/parking-lots/assigned'
+Expect (CallApi 'GET' $assignedPath $null $customerToken).Status 403 'customers cannot read the operational catalog'
+Expect @((CallApi 'GET' $assignedPath $null $staffToken).Data).Count 0 'unassigned staff sees no lots'
+$adminLotIds = @((CallApi 'GET' $assignedPath $null $adminToken).Data | ForEach-Object id)
+Expect ($adminLotIds -contains $lot.Data.id -and $adminLotIds -contains $otherLot.Data.id) $true 'admin sees both lots'
 $vehicle = CallApi 'POST' '/api/vehicles' @{ plateNumber = "T$suffix"; type = 1 } $customerToken
 Expect $vehicle.Status 201 'customer create vehicle'
 Expect (CallApi 'GET' "/api/vehicles/search?plate=T$suffix" $null $staffToken).Status 200 'staff searches plate'
 Expect (CallApi 'POST' '/api/vehicles' @{ plateNumber = "T$suffix"; type = 1 } $customerToken).Status 409 'duplicate plate denied'
 
 $start = [DateTime]::UtcNow.AddMinutes(2).ToString('O')
-$end = [DateTime]::UtcNow.AddHours(1).ToString('O')
-$request = @{ vehicleId = $vehicle.Data.id; parkingSpotId = $spot.Data.id; startUtc = $start; endUtc = $end }
+$end = ([DateTime]$start).ToUniversalTime().AddDays(3).ToString('O')
+$estimatePath = "/api/pricing/estimate?vehicleType=1&startUtc=$([uri]::EscapeDataString($start))&endUtc=$([uri]::EscapeDataString($end))"
+$estimate = CallApi 'GET' $estimatePath
+Expect $estimate.Status 200 'booking can preview fees for three days'
+Expect $estimate.Data.billableHours 72 'planned stay uses the full duration'
+$request = @{ vehicleId = $vehicle.Data.id; parkingSpotId = $spot.Data.id; startUtc = $start; endUtc = $end; expectedFee = $estimate.Data.total }
+$wrongFee = $request.Clone()
+$wrongFee.expectedFee = $estimate.Data.total + 1
+Expect (CallApi 'POST' '/api/reservations' $wrongFee $customerToken).Status 409 'customer must see the current booking estimate'
+$tooLong = $request.Clone()
+$tooLong.endUtc = ([DateTime]$start).ToUniversalTime().AddDays(31).ToString('O')
+Expect (CallApi 'POST' '/api/reservations' $tooLong $customerToken).Status 400 'reservations above 30 days are rejected'
 $reservation = CallApi 'POST' '/api/reservations' $request $customerToken
-Expect $reservation.Status 201 'customer reserve spot'
+Expect $reservation.Status 201 'customer requests spot for three days'
+Expect $reservation.Data.status 4 'new reservation waits for approval'
+Expect $reservation.Data.estimatedFee $estimate.Data.total 'booking preserves the fee shown before submission'
+$reservationPath = "/api/reservations/$($reservation.Data.id)"
+$pendingPath = '/api/reservations/pending'
+$activePath = "/api/reservations/active?plate=T$suffix"
+Expect (CallApi 'GET' $pendingPath $null $customerToken).Status 403 'customer cannot see review queue'
+Expect (CallApi 'POST' "$reservationPath/approve" $null $customerToken).Status 403 'customer cannot approve their own request'
+Expect @((CallApi 'GET' $pendingPath $null $staffToken).Data).Count 0 'unassigned staff sees no pending requests'
+Expect (CallApi 'POST' "$reservationPath/approve" $null $staffToken).Status 404 'unassigned staff cannot approve directly'
+Expect @((CallApi 'GET' $activePath $null $staffToken).Data).Count 0 'pending request is excluded from check-in lookup'
+Expect @((CallApi 'GET' $pendingPath $null $adminToken).Data).Count 1 'admin sees all pending requests'
+Expect (CallApi 'PUT' "/api/admin/staff/$($assigned.Data.id)/lots" @{ parkingLotIds = @($lot.Data.id) } $adminToken).Status 204 'admin assigns staff to lot'
+$staffLots = @((CallApi 'GET' $assignedPath $null $staffToken).Data)
+Expect $staffLots.Count 1 'staff sees one assigned lot'
+Expect $staffLots[0].id $lot.Data.id 'staff sees the assigned lot only'
+Expect @((CallApi 'GET' "/api/parking-spots/operational?parkingLotId=$($otherLot.Data.id)" $null $staffToken).Data).Count 0 'other lot spots are excluded'
+Expect @((CallApi 'GET' $pendingPath $null $staffToken).Data).Count 1 'assigned staff sees request'
+$rangeMapPath = "/api/parking-spots/map?parkingLotId=$($lot.Data.id)&startUtc=$([uri]::EscapeDataString($start))&endUtc=$([uri]::EscapeDataString($end))"
+Expect (CallApi 'GET' $rangeMapPath).Data[0].status 'Reserved' 'pending request holds spot in selected range'
+Expect (CallApi 'POST' '/api/reservations' $request $customerToken).Status 409 'pending request blocks overlap'
+Expect (CallApi 'POST' "$reservationPath/reject" @{ reason = '   ' } $staffToken).Status 400 'rejection requires a reason'
+Expect (CallApi 'POST' "$reservationPath/reject" @{ reason = 'Bảo trì' } $staffToken).Status 204 'assigned staff rejects request'
+$rejected = CallApi 'GET' $reservationPath $null $customerToken
+Expect $rejected.Data.status 5 'owner can see rejection'
+Expect $rejected.Data.rejectionReason 'Bảo trì' 'owner can read rejection reason'
+Expect (CallApi 'GET' $rangeMapPath).Data[0].status 'Available' 'reject releases held spot'
+$reservation = CallApi 'POST' '/api/reservations' $request $customerToken
+Expect $reservation.Status 201 'released spot can be requested again'
+$reservationPath = "/api/reservations/$($reservation.Data.id)"
+Expect (CallApi 'POST' "$reservationPath/approve" $null $staffToken).Status 204 'assigned staff approves request'
+Expect (CallApi 'GET' $reservationPath $null $customerToken).Data.status 1 'owner sees confirmation'
+$arrivalQueue = CallApi 'GET' '/api/reservations/arrivals' $null $staffToken
+Expect $arrivalQueue.Status 200 'staff can load arrivals'
+Expect $arrivalQueue.Data[0].lotId $lot.Data.id 'arrivals are grouped by assigned lot'
+Expect $arrivalQueue.Data[0].canCheckIn $false 'arrival is disabled until the booked start'
+Expect (CallApi 'POST' "$reservationPath/approve" $null $adminToken).Status 409 'duplicate review is rejected'
 $myParkedPath = '/api/parking-sessions/mine/active'
 Expect (CallApi 'GET' $myParkedPath).Status 401 'parked vehicles require login'
 Expect @((CallApi 'GET' $myParkedPath $null $customerToken).Data).Count 0 'reservation alone does not locate a parked vehicle'
-Expect (CallApi 'GET' "/api/reservations/active?plate=T$suffix" $null $staffToken).Status 200 'staff searches reservation'
+Expect @((CallApi 'GET' $activePath $null $staffToken).Data).Count 1 'approved request appears in check-in lookup'
 Expect (CallApi 'POST' '/api/reservations' $request $customerToken).Status 409 'overlap denied'
 Expect (CallApi 'POST' "/api/reservations/$($reservation.Data.id)/cancel" $null $customerToken).Status 204 'customer cancel reservation'
+Expect @((CallApi 'GET' $assignedPath $null $staffToken).Data).Count 1 'assigned lot is listed with no pending requests'
 Expect (CallApi 'GET' "/api/parking-spots/map?parkingLotId=$($lot.Data.id)").Status 200 'public spot map'
+Expect (CallApi 'POST' '/api/parking-sessions/check-in' @{
+    vehicleId = $vehicle.Data.id; parkingSpotId = $otherSpot.Data.id
+} $staffToken).Status 400 'staff cannot check in through an unassigned lot'
 
 $checkIn = CallApi 'POST' '/api/parking-sessions/check-in' @{
     vehicleId = $vehicle.Data.id; parkingSpotId = $spot.Data.id
@@ -144,7 +203,16 @@ Expect (CallApi 'GET' '/api/parking-sessions/unpaid' $null $staffToken).Status 2
 if ($checkOut.Data.fee -ne 5000) { throw "Unexpected fee: $($checkOut.Data.fee)" }
 Write-Output 'PASS one-hour motorbike fee (5000)'
 $paymentPath = "/api/payments/parking-session/$($checkIn.Data.id)"
-Expect (CallApi 'GET' "$paymentPath/transfer" $null $customerToken).Status 403 'customer cannot generate transfer QR'
+Expect (CallApi 'GET' '/api/payments/mine').Status 401 'payment history requires login'
+$customerBill = (CallApi 'GET' '/api/payments/mine' $null $customerToken).Data
+Expect $customerBill[0].sessionId $checkIn.Data.id 'customer sees own unpaid parking fee'
+Expect $customerBill[0].amount 5000 'customer sees exact fee for checkout'
+Expect $customerBill[0].paidAtUtc $null 'unpaid fee has no receipt timestamp'
+Expect @((CallApi 'GET' '/api/payments/mine' $null $adminToken).Data).Count 0 'personal bills exclude another account'
+$ownerTransfer = CallApi 'GET' "$paymentPath/transfer" $null $customerToken
+Expect $ownerTransfer.Status 200 'customer can read payment details for own session'
+Expect $ownerTransfer.Data.amount 5000 'owner transfer amount matches invoice'
+Expect (CallApi 'POST' $paymentPath @{ method = 1 } $customerToken).Status 403 'customer cannot mark own payment paid'
 $transfer = CallApi 'GET' "$paymentPath/transfer" $null $staffToken
 Expect $transfer.Status 200 'staff can read transfer details'
 Expect $transfer.Data.enabled ([bool]$ConfiguredTransfer) 'QR availability matches configuration'
@@ -161,10 +229,96 @@ $unpaidAfterPay = CallApi 'GET' '/api/parking-sessions/unpaid' $null $staffToken
 if (@($unpaidAfterPay.Data).Count -ne 0) { throw 'Paid session still appears as unpaid' }
 Write-Output 'PASS paid session removed from unpaid list'
 Expect (CallApi 'POST' "/api/payments/parking-session/$($checkIn.Data.id)" @{ method = 1 } $staffToken).Status 409 'duplicate payment denied'
+$otherSession = CallApi 'POST' '/api/parking-sessions/check-in' @{
+    vehicleId = $vehicle.Data.id; parkingSpotId = $otherSpot.Data.id
+} $adminToken
+Expect $otherSession.Status 201 'admin can check in through the other lot'
+Expect @((CallApi 'GET' '/api/parking-sessions/active' $null $staffToken).Data).Count 0 'staff active list excludes the other lot'
+Expect (CallApi 'POST' "/api/parking-sessions/$($otherSession.Data.id)/check-out" $null $staffToken).Status 404 'staff cannot check out a vehicle in the other lot'
+$customerExit = "/api/parking-sessions/mine/$($otherSession.Data.id)"
+Expect (CallApi 'GET' "$customerExit/checkout-quote" $null $adminToken).Status 404 'another user cannot preview a private fee'
+$exitQuote = CallApi 'GET' "$customerExit/checkout-quote" $null $customerToken
+Expect $exitQuote.Data.charge.total 5000 'owner previews the walk-in charge'
+Expect (CallApi 'POST' "$customerExit/check-out" @{ expectedFee = 5001 } $customerToken).Status 409 'customer must accept the current fee'
+Expect (CallApi 'POST' "$customerExit/check-out" @{ expectedFee = 5000 } $adminToken).Status 404 'another user cannot confirm departure'
+Expect (CallApi 'POST' "$customerExit/check-out" @{ expectedFee = 5000 } $customerToken).Status 200 'owner confirms departure'
+Expect (CallApi 'POST' "$customerExit/check-out" @{ expectedFee = 5000 } $customerToken).Data.fee 5000 'owner departure retry returns the settled fee'
+Expect @((CallApi 'GET' '/api/parking-sessions/unpaid' $null $staffToken).Data).Count 0 'staff unpaid list excludes the other lot'
+Expect (CallApi 'POST' "/api/payments/parking-session/$($otherSession.Data.id)" @{ method = 1 } $staffToken).Status 404 'staff cannot record payment in the other lot'
+Expect (CallApi 'GET' "$paymentPath/transfer" $null $customerToken).Status 409 'paid session no longer issues transfer QR'
+$receipt = (CallApi 'GET' '/api/payments/mine' $null $customerToken).Data | Where-Object sessionId -eq $checkIn.Data.id
+Expect ([bool]$receipt.paidAtUtc) $true 'customer can read updated receipt'
+Expect $receipt.paymentMethod $pay.Data.method 'customer receipt displays actual payment method'
+
+if ($ConfiguredTransfer) {
+    $walletPath = '/api/wallet/mine'
+    Expect (CallApi 'GET' $walletPath).Status 401 'wallet requires login'
+    Expect (CallApi 'GET' $walletPath $null $customerToken).Data.balance 0 'new wallet starts at zero'
+    $createTopUp = @{ requestId = [guid]::NewGuid().ToString(); amount = 5000 }
+    $topUp = CallApi 'POST' '/api/wallet/top-ups' $createTopUp $customerToken
+    Expect $topUp.Status 201 'customer requests top-up'
+    Expect (CallApi 'POST' '/api/wallet/top-ups' $createTopUp $customerToken).Data.id $topUp.Data.id 'top-up request can be retried'
+    if (-not $topUp.Data.payload.Contains('54045000') -or -not $topUp.Data.payload.Contains($topUp.Data.transferReference)) { throw 'Top-up QR omitted the amount or reference' }
+    $approvePath = "/api/wallet/top-ups/$($topUp.Data.id)/approve"
+    $approval = @{ receivedAmount = 5000; bankTransactionCode = "TOP$suffix" }
+    Expect (CallApi 'POST' $approvePath $approval $staffToken).Status 403 'staff cannot credit wallet'
+    Expect (CallApi 'GET' $walletPath $null $customerToken).Data.balance 0 'pending top-up does not credit wallet'
+    Expect (CallApi 'POST' $approvePath @{ receivedAmount = 4000; bankTransactionCode = "TOP$suffix" } $adminToken).Status 400 'wrong received amount is rejected'
+    Expect (CallApi 'POST' $approvePath @{ receivedAmount = 5000; bankTransactionCode = "test$suffix" } $adminToken).Status 409 'previous bank payment cannot also credit a wallet'
+    Expect (CallApi 'POST' $approvePath $approval $adminToken).Status 204 'admin credits reconciled top-up'
+    Expect (CallApi 'POST' $approvePath $approval $adminToken).Status 204 'retry does not duplicate credit'
+    Expect (CallApi 'GET' $walletPath $null $customerToken).Data.balance 5000 'credited balance is exact'
+    Expect (CallApi 'GET' $walletPath $null $adminToken).Data.balance 0 'wallet belongs to its owner'
+
+    $otherPaymentPath = "/api/payments/parking-session/$($otherSession.Data.id)"
+    Expect (CallApi 'POST' $otherPaymentPath @{ method = 3; note = "top$suffix" } $adminToken).Status 409 'top-up receipt cannot also pay a parking bill'
+    Expect (CallApi 'POST' "$otherPaymentPath/balance" $null $adminToken).Status 404 'admin cannot debit an unrelated balance'
+    $nextSession = CallApi 'POST' '/api/parking-sessions/check-in' @{ vehicleId = $vehicle.Data.id; parkingSpotId = $otherSpot.Data.id } $adminToken
+    Expect $nextSession.Status 201 'creates a second unpaid bill for the race test'
+    Expect (CallApi 'POST' "/api/parking-sessions/$($nextSession.Data.id)/check-out" $null $adminToken).Status 200 'second bill is ready for payment'
+    $billedSessions = @($otherSession.Data.id, $nextSession.Data.id)
+    $attempts = $billedSessions | ForEach-Object -Parallel {
+        $headers = @{ Authorization = 'Bearer ' + $using:customerToken }
+        $path = $using:BaseUrl + "/api/payments/parking-session/$_/balance"
+        $response = Invoke-WebRequest -Method POST -Uri $path -Headers $headers -SkipHttpErrorCheck
+        [pscustomobject]@{ SessionId = $_; Status = [int]$response.StatusCode }
+    }
+    Expect @($attempts | Where-Object Status -eq 204).Count 1 'only one simultaneous purchase uses the same balance'
+    Expect @($attempts | Where-Object Status -eq 409).Count 1 'second purchase is rejected when balance is exhausted'
+    $paidWithBalance = ($attempts | Where-Object Status -eq 204).SessionId
+    Expect (CallApi 'POST' "/api/payments/parking-session/$paidWithBalance/balance" $null $customerToken).Status 204 'wallet payment can be retried safely'
+    Expect (CallApi 'GET' $walletPath $null $customerToken).Data.balance 0 'purchase debits balance once'
+    $balanceReceipt = (CallApi 'GET' '/api/payments/mine' $null $customerToken).Data | Where-Object sessionId -eq $paidWithBalance
+    Expect $balanceReceipt.paymentMethod 4 'receipt identifies balance payment'
+}
+
 $summary = CallApi 'GET' '/api/dashboard/summary' $null $adminToken
 Expect $summary.Status 200 'admin dashboard'
-if ($summary.Data.revenueToday -ne ($startingRevenue + 5000)) { throw 'Dashboard revenue mismatch' }
-Write-Output 'PASS dashboard revenue (5000)'
+$expectedRevenue = $startingRevenue + $(if ($ConfiguredTransfer) { 10000 } else { 5000 })
+Expect $summary.Data.revenueToday $expectedRevenue 'dashboard counts parking payments and excludes top-up credits'
+
+$reportDate = [DateTime]::UtcNow.AddHours(7).ToString('yyyy-MM-dd')
+$revenuePath = "/api/dashboard/revenue?lotId=$($lot.Data.id)&period=day&date=$reportDate"
+$otherRevenuePath = "/api/dashboard/revenue?lotId=$($otherLot.Data.id)&period=day&date=$reportDate"
+Expect (CallApi 'GET' $revenuePath $null $customerToken).Status 403 'customer cannot see operational revenue'
+Expect (CallApi 'GET' $otherRevenuePath $null $staffToken).Status 404 'staff cannot read another lot revenue'
+Expect (CallApi 'GET' $otherRevenuePath $null $adminToken).Status 200 'admin can view another lot revenue'
+$dayReport = (CallApi 'GET' $revenuePath $null $staffToken).Data
+Expect $dayReport.lot.id $lot.Data.id 'report is for the selected assigned lot'
+Expect $dayReport.revenue 5000 'lot revenue only includes paid parking fees'
+Expect $dayReport.paymentCount 1 'report counts settled parking payments'
+Expect $dayReport.periods.Count 24 'daily report contains one bucket per hour'
+$expectedHour = ([DateTimeOffset]$pay.Data.paidAtUtc).ToOffset([TimeSpan]::FromHours(7)).Hour
+Expect $dayReport.periods[$expectedHour].revenue 5000 'daily report buckets payment in Vietnam time'
+Expect $dayReport.periods[$expectedHour].methods[0].method $pay.Data.method 'hour breakout includes payment method'
+$monthReport = (CallApi 'GET' "/api/dashboard/revenue?lotId=$($lot.Data.id)&period=month&date=2024-02-20" $null $staffToken).Data
+Expect $monthReport.periods.Count 29 'monthly report includes leap day'
+Expect $monthReport.revenue 0 'empty month returns zero revenue'
+$yearReport = (CallApi 'GET' "/api/dashboard/revenue?lotId=$($lot.Data.id)&period=year&date=$reportDate" $null $staffToken).Data
+Expect $yearReport.periods.Count 12 'yearly report contains twelve months'
+Expect $yearReport.revenue $dayReport.revenue 'yearly report agrees with daily revenue on fresh test lot'
+Expect (CallApi 'GET' "/api/dashboard/revenue?lotId=$($lot.Data.id)&period=week&date=$reportDate" $null $staffToken).Status 400 'invalid period returns a validation error'
+
 Expect (CallApi 'DELETE' "/api/admin/staff/$($assigned.Data.id)" $null $adminToken).Status 204 'admin revokes staff'
 $relogin = CallApi 'POST' '/api/auth/login?useCookies=false' @{ email = $email; password = $password }
 Expect $relogin.Status 200 'customer login after revoke'

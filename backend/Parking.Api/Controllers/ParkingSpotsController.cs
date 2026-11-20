@@ -15,14 +15,21 @@ public class ParkingSpotsController : ControllerBase
     public ParkingSpotsController(ParkingDbContext db) => _db = db;
 
     [HttpGet]
-    public async Task<IActionResult> Get(int? parkingLotId, CancellationToken ct)
-    {
-        var query = _db.ParkingSpots.AsNoTracking();
+    public Task<IActionResult> Get(int? parkingLotId, CancellationToken ct) =>
+        List(_db.ParkingSpots, parkingLotId, ct);
 
+    [HttpGet("operational")]
+    [Authorize(Roles = "Admin,Staff")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public Task<IActionResult> Operational(int? parkingLotId, CancellationToken ct) =>
+        List(_db.OperationalSpots(User), parkingLotId, ct);
+
+    private async Task<IActionResult> List(IQueryable<ParkingSpot> query, int? parkingLotId, CancellationToken ct)
+    {
         if (parkingLotId.HasValue)
             query = query.Where(x => x.ParkingLotId == parkingLotId.Value);
 
-        var spots = await query.OrderBy(x => x.Code)
+        var spots = await query.AsNoTracking().OrderBy(x => x.Code)
             .Select(x => new ParkingSpotResponse(
                 x.Id, x.ParkingLotId, x.Code, x.Type, x.IsActive))
             .ToListAsync(ct);
@@ -31,10 +38,20 @@ public class ParkingSpotsController : ControllerBase
     }
 
     [HttpGet("map")]
-    public async Task<IActionResult> Map([FromQuery] int parkingLotId, CancellationToken ct)
+    public async Task<IActionResult> Map([FromQuery] int parkingLotId, [FromQuery] DateTimeOffset? startUtc,
+        [FromQuery] DateTimeOffset? endUtc, CancellationToken ct)
     {
         if (!await _db.ParkingLots.AnyAsync(l => l.Id == parkingLotId, ct)) return NotFound();
         var now = DateTime.UtcNow;
+        var holds = _db.Reservations.Where(r => r.Status == ReservationStatus.Active &&
+            r.StartUtc <= now && r.EndUtc > now);
+        if (startUtc is not null || endUtc is not null)
+        {
+            if (startUtc is not { } start || endUtc is not { } end || end <= start ||
+                end - start > ReservationQueries.MaxDuration)
+                return BadRequest("Khung giờ đặt chỗ không hợp lệ.");
+            holds = _db.Reservations.HoldingBetween(start.UtcDateTime, end.UtcDateTime, now);
+        }
         var spots = await _db.ParkingSpots.AsNoTracking()
             .Where(s => s.ParkingLotId == parkingLotId)
             .OrderBy(s => s.Code)
@@ -42,8 +59,7 @@ public class ParkingSpotsController : ControllerBase
             {
                 s.Id, s.ParkingLotId, s.Code, s.Type, s.IsActive,
                 Occupied = _db.ParkingSessions.Any(p => p.ParkingSpotId == s.Id && p.CheckOutUtc == null),
-                Reserved = _db.Reservations.Any(r => r.ParkingSpotId == s.Id &&
-                    r.Status == ReservationStatus.Active && r.StartUtc <= now && r.EndUtc >= now)
+                Reserved = holds.Any(r => r.ParkingSpotId == s.Id)
             }).ToListAsync(ct);
         return Ok(spots.Select(s => new
         {
@@ -74,8 +90,8 @@ public class ParkingSpotsController : ControllerBase
         if (string.IsNullOrWhiteSpace(code) || !Enum.IsDefined(request.Type))
             return BadRequest("Mã chỗ hoặc loại xe không hợp lệ.");
 
-        if (!await _db.ParkingLots.AnyAsync(x => x.Id == request.ParkingLotId, ct))
-            return BadRequest("Bãi xe không tồn tại.");
+        if (!await _db.OperationalLots(User).AnyAsync(x => x.Id == request.ParkingLotId, ct))
+            return User.IsInRole("Admin") ? BadRequest("Bãi xe không tồn tại.") : NotFound("Bãi xe không có trong danh sách phụ trách.");
 
         if (await _db.ParkingSpots.AnyAsync(
             x => x.ParkingLotId == request.ParkingLotId && x.Code == code, ct))
@@ -101,7 +117,7 @@ public class ParkingSpotsController : ControllerBase
     [Authorize(Roles = "Admin,Staff")]
     public async Task<IActionResult> SetActive(int id, [FromBody] SetSpotActiveRequest request, CancellationToken ct)
     {
-        var spot = await _db.ParkingSpots.FirstOrDefaultAsync(s => s.Id == id, ct);
+        var spot = await _db.OperationalSpots(User).FirstOrDefaultAsync(s => s.Id == id, ct);
         if (spot is null) return NotFound();
         if (!request.IsActive && await _db.ParkingSessions.AnyAsync(s => s.ParkingSpotId == id && s.CheckOutUtc == null, ct))
             return Conflict("Chỗ đang có xe gửi.");

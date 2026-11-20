@@ -12,6 +12,7 @@ var builder = WebApplication.CreateBuilder(args.Where(arg => arg != "--seed-da-n
 
 builder.Services.AddControllers();
 builder.Services.AddSingleton<OccupancyDataset>();
+builder.Services.AddSingleton<ParkingPricing>();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 var connectionString = builder.Configuration.GetConnectionString("ParkingDb")
@@ -20,8 +21,11 @@ var connectionString = builder.Configuration.GetConnectionString("ParkingDb")
 builder.Services.AddDbContext<ParkingDbContext>(options =>
     options.UseNpgsql(connectionString));
 builder.Services.AddAuthorization();
+var frontendOrigins = builder.Environment.IsDevelopment()
+    ? new[] { "http://localhost:5173", "http://localhost:5174" }
+    : new[] { "http://localhost:5173" };
 builder.Services.AddCors(options => options.AddPolicy("ReactDev", policy =>
-    policy.WithOrigins("http://localhost:5173").AllowAnyHeader().AllowAnyMethod()));
+    policy.WithOrigins(frontendOrigins).AllowAnyHeader().AllowAnyMethod()));
 
 builder.Services.AddIdentityApiEndpoints<IdentityUser>(options => options.User.RequireUniqueEmail = true)
     .AddRoles<IdentityRole>()
@@ -47,6 +51,20 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseCors("ReactDev");
+app.Use(async (context, next) =>
+{
+    var requestAborted = context.RequestAborted;
+    try
+    {
+        await next(context);
+    }
+    catch (OperationCanceledException) when (requestAborted.IsCancellationRequested)
+    {
+        // The client disconnected while the API was processing the request.
+        if (!context.Response.HasStarted)
+            context.Response.StatusCode = StatusCodes.Status499ClientClosedRequest;
+    }
+});
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -66,4 +84,5 @@ if (seedDaNang)
     await DaNangDemoSeeder.SeedAsync(app.Services);
     return;
 }
+
 app.Run();

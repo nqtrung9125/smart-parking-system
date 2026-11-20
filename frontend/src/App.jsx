@@ -1,70 +1,136 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
+import Icon from './components/Icon'
 import ParkingArtwork from './components/ParkingArtwork'
-import { SiteHeader, SiteFooter } from './components/SiteChrome'
+import { useAuth } from './auth/useAuth'
+import { portalFor, portalPaths } from './lib/portal'
 import { useResource } from './lib/useResource'
 import './App.css'
 
-export function Icon({ name, size = 20 }) {
-  const shapes = {
-    arrow: <><path d="M4 12h15m-6-6 6 6-6 6" /></>,
-    pin: <><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="2.6" /></>,
-    search: <><circle cx="10.8" cy="10.8" r="6.3" /><path d="m16 16 4.5 4.5" /></>,
-    grid: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,
-    clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
-    map: <path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15m6-12v15" />,
-    car: <path d="m5 11 2-5h10l2 5M4 11h16v6H4zM7 17v2m10-2v2M7 14h1m8 0h1" />,
-  }
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{shapes[name]}</svg>
+const spotFilters = [[0, 'Tất cả'], [2, 'Ô tô'], [1, 'Xe máy']]
+
+const guide = [
+  ['search', 'Chọn bãi', 'Tìm theo tên, địa chỉ hoặc loại xe.'],
+  ['map', 'Xem sơ đồ', 'Kiểm tra trạng thái từng vị trí đỗ trước khi đến.'],
+  ['clock', 'Đặt chỗ', 'Chọn xe, vị trí và khung giờ bạn dự kiến gửi.'],
+]
+
+const operatorLinks = {
+  admin: 'Quản trị hệ thống',
+  staff: 'Mở ca trực',
+}
+
+function HomeHero({ operation, area }) {
+  return <section className="landing-hero" aria-labelledby="hero-title">
+    <div className="hero-copy">
+      <h1 id="hero-title">Tìm bãi đỗ xe</h1>
+      <p>{operation ? 'Tra cứu bãi, kiểm tra sơ đồ và trạng thái các ô đỗ.' : 'Tìm bãi theo địa chỉ, xem chỗ trống trên sơ đồ và đặt trước khi đến.'}</p>
+      <div className="hero-buttons">
+        {operation ?
+          <Link className="landing-button hero-primary" to={portalPaths[area]}>{operation} <Icon name="arrow" size={18} /></Link> :
+          <Link className="landing-button hero-primary" to="/#lots"><Icon name="search" size={18} /> Xem danh sách bãi</Link>}
+        {operation ?
+          <Link className="landing-button hero-secondary" to="/#lots">Xem danh sách bãi</Link> :
+          <Link className="landing-button hero-secondary" to="/reservations">Đặt chỗ trước <Icon name="arrow" size={17} /></Link>}
+      </div>
+    </div>
+    <figure className="hero-visual">
+      <ParkingArtwork />
+      <figcaption><span>Sơ đồ minh họa</span><span><i /> Trống</span><span><i /> Có xe</span><span><i /> Đã đặt</span></figcaption>
+    </figure>
+  </section>
+}
+
+function LotCard({ lot, activeCount }) {
+  return <article className="directory-card">
+    <div className="directory-card-top">
+      <span className="metric-icon"><Icon name="car" /></span>
+      <span className="directory-chip">{activeCount} ô đang hoạt động</span>
+    </div>
+    <h3>{lot.name}</h3>
+    <p><Icon name="pin" size={16} /> {lot.address}</p>
+    <Link to={'/lots/' + lot.id} aria-label={'Xem sơ đồ ' + lot.name}>Xem sơ đồ <Icon name="arrow" size={17} /></Link>
+  </article>
 }
 
 export default function App() {
-  const lots = useResource('/api/parking-lots')
-  const spots = useResource('/api/parking-spots')
+  const { user, token } = useAuth()
+  const area = portalFor(user)
+  const operation = operatorLinks[area]
+  const staff = area === 'staff'
+  const lots = useResource(staff ? '/api/parking-lots/assigned' : '/api/parking-lots', staff ? token : undefined)
+  const spots = useResource(staff ? '/api/parking-spots/operational' : '/api/parking-spots', staff ? token : undefined)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState(0)
   const lotRows = lots.data || []
   const allSpots = spots.data || []
+  const activeSpotsByLot = new Map()
+  let activeCount = 0
+
+  for (const spot of allSpots) {
+    if (!spot.isActive) continue
+    const active = activeSpotsByLot.get(spot.parkingLotId) || []
+    active.push(spot)
+    activeSpotsByLot.set(spot.parkingLotId, active)
+    activeCount += 1
+  }
+
   const term = query.trim().toLocaleLowerCase('vi')
   const results = lotRows.filter((lot) =>
     [lot.name, lot.address].some((value) => value.toLocaleLowerCase('vi').includes(term)) &&
-    (!filter || allSpots.some((spot) => spot.parkingLotId === lot.id && spot.isActive && spot.type === filter)))
+    (!filter || activeSpotsByLot.get(lot.id)?.some((spot) => spot.type === filter)))
   const error = lots.error || spots.error
   const busy = lots.loading || spots.loading
+  const metrics = [['pin', lotRows.length, 'Bãi xe'], ['grid', allSpots.length, 'Ô đỗ'], ['car', activeCount, 'Ô đang hoạt động']]
 
-  return <div className="parking-home">
-    <SiteHeader />
-    <main className="landing-container">
-      <section className="landing-hero" aria-labelledby="hero-title">
-        <div className="hero-copy-new">
-          <div className="hero-tag"><span /> BÃI ĐỖ XE THÔNG MINH</div>
-          <h1 id="hero-title">Tìm chỗ đỗ.<br /><em>Đi tiếp thôi.</em></h1>
-          <p>Khám phá các bãi xe, xem trạng thái từng chỗ đỗ và đặt trước ngay trên một trang.</p>
-          <div className="hero-buttons"><a className="landing-button teal-button" href="#lots">Tìm bãi đỗ <Icon name="arrow" size={18} /></a><Link className="landing-button ghost-button" to="/reservations">Đặt chỗ trước</Link></div>
+  function refreshDirectory() {
+    lots.refresh()
+    spots.refresh()
+  }
+
+  return <main className="page-wrap home-page">
+    <HomeHero operation={operation} area={area} />
+    <dl className="landing-metrics" aria-label="Tổng quan hệ thống">
+      {metrics.map(([icon, value, label]) => <div key={label}>
+        <span className="metric-icon"><Icon name={icon} size={18} /></span>
+        <dt>{label}</dt>
+        <dd>{busy || error ? '—' : value}</dd>
+      </div>)}
+    </dl>
+
+    <section className="directory" id="lots" aria-labelledby="directory-title">
+      <div className="directory-heading">
+        <div>
+          <h2 id="directory-title">{staff ? 'Bãi được phân công' : 'Danh sách bãi xe'}</h2>
+          <p>Chọn một bãi để xem sơ đồ và tình trạng chỗ đỗ.</p>
         </div>
-        <div className="hero-visual"><div className="visual-meta"><span><Icon name="grid" size={16} /> SƠ ĐỒ BÃI XE</span><small>Minh họa</small></div><ParkingArtwork /><div className="visual-legend"><span><i /> Chỗ trống</span><span><i /> Có xe</span><span><i /> Đã đặt</span></div></div>
-      </section>
-
-      <div className="landing-metrics" aria-label="Tổng quan hệ thống">
-        {[['pin', lotRows.length, 'Bãi xe'], ['grid', allSpots.length, 'Vị trí đỗ'], ['car', allSpots.filter((s) => s.isActive).length, 'Vị trí đang mở']].map(([icon, value, label]) =>
-          <div key={label}><span className="metric-icon"><Icon name={icon} /></span><div><strong>{busy || error ? '—' : value}</strong><span>{label}</span></div></div>)}
+        <button className="landing-button refresh-light" type="button" disabled={busy} onClick={refreshDirectory}><Icon name="refresh" size={17} /> Cập nhật</button>
       </div>
+      <div className="directory-tools">
+        <label className="directory-search">
+          <Icon name="search" size={19} />
+          <span className="sr-only">Tìm theo tên hoặc địa chỉ</span>
+          <input placeholder="Tìm theo tên hoặc địa chỉ…" value={query} onChange={(event) => setQuery(event.target.value)} />
+        </label>
+        <div className="directory-filters" role="group" aria-label="Loại xe">
+          {spotFilters.map(([value, label]) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}</button>)}
+        </div>
+      </div>
+      {busy && <div className="directory-state" role="status">Đang tải bãi xe…</div>}
+      {!busy && error && <div className="directory-state" role="status">Chưa tải được danh sách bãi. Hãy thử cập nhật lại.</div>}
+      {!busy && !error && (results.length ? <div className="directory-cards">
+        {results.map((lot) => <LotCard key={lot.id} lot={lot} activeCount={activeSpotsByLot.get(lot.id)?.length ?? 0} />)}
+      </div> : <div className="directory-state" role="status">{lotRows.length ? 'Không tìm thấy bãi xe phù hợp.' : staff ? 'Tài khoản chưa được phân công bãi.' : 'Chưa có bãi xe nào.'}</div>)}
+    </section>
 
-      <section className="directory" id="lots" aria-labelledby="directory-title">
-        <div className="directory-heading"><div><span className="landing-kicker">DANH MỤC BÃI ĐỖ</span><h2 id="directory-title">Khám phá bãi đỗ xe</h2><p>Chọn một bãi để xem chỗ trống và đặt chỗ.</p></div>
-          <button className="landing-button refresh-light" type="button" disabled={busy} onClick={() => { lots.refresh(); spots.refresh() }}>↻ Cập nhật</button></div>
-        <div className="directory-tools"><label className="directory-search"><Icon name="search" /><span className="sr-only">Tìm theo tên hoặc địa chỉ</span><input placeholder="Tìm theo tên hoặc địa chỉ…" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
-          <div className="directory-filters" role="group" aria-label="Loại xe">{[[0, 'Tất cả'], [2, 'Ô tô'], [1, 'Xe máy']].map(([value, label]) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}</button>)}</div></div>
-        {busy ? <div className="directory-state" role="status">Đang tải bãi xe…</div> : error ? <div className="directory-state" role="status">Chưa tải được dữ liệu. Kiểm tra API rồi nhấn Cập nhật.</div> : !results.length ? <div className="directory-state" role="status">{lotRows.length ? 'Không tìm thấy bãi xe phù hợp.' : 'Chưa có bãi xe nào.'}</div> :
-          <div className="directory-cards">{results.map((lot) => {
-            const local = allSpots.filter((spot) => spot.parkingLotId === lot.id && spot.isActive)
-            return <article className="directory-card" key={lot.id}><div className="directory-card-top"><span className="metric-icon"><Icon name="car" /></span><span className="directory-chip">{local.length} vị trí đang mở</span></div><h3>{lot.name}</h3><p><Icon name="pin" size={16} /> {lot.address}</p><Link to={'/lots/' + lot.id}>Xem sơ đồ và chi tiết <Icon name="arrow" size={17} /></Link></article>
-          })}</div>}
-      </section>
-      <section className="landing-guide" id="guide" aria-labelledby="guide-title"><span className="landing-kicker">TRƯỚC KHI BẠN ĐẾN</span><h2 id="guide-title">Đỗ xe trong 3 bước</h2><div className="guide-steps">
-        {[['search', 'Chọn bãi', 'Tìm theo tên, địa chỉ hoặc loại xe.'], ['map', 'Xem sơ đồ', 'Kiểm tra trạng thái từng vị trí đỗ.'], ['clock', 'Đặt chỗ', 'Chọn xe, vị trí và giờ bạn dự kiến đến.']].map(([icon, title, body], i) => <div key={title}><span className="metric-icon"><Icon name={icon} /></span><div><h3>{i + 1}. {title}</h3><p>{body}</p></div></div>)}
-      </div></section>
-    </main>
-    <SiteFooter />
-  </div>
+    {!operation && <section className="landing-guide" id="guide" aria-labelledby="guide-title">
+      <h2 id="guide-title">Cách đặt chỗ</h2>
+      <ol className="guide-steps">
+        {guide.map(([icon, title, body]) => <li key={title}>
+          <span className="metric-icon"><Icon name={icon} size={18} /></span>
+          <div><h3>{title}</h3><p>{body}</p></div>
+        </li>)}
+      </ol>
+    </section>}
+  </main>
 }

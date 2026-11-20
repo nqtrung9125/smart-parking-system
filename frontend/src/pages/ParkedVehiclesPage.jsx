@@ -1,9 +1,57 @@
-import { Link, useSearchParams } from 'react-router'
+import { useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { useAuth } from '../auth/useAuth'
 import { useResource } from '../lib/useResource'
-import { dateTime, vehicleType } from '../lib/format'
+import { api } from '../lib/api'
+import { dateTime, money, vehicleType } from '../lib/format'
 import BookingPreview from '../components/BookingPreview'
+import ParkingFeeBreakdown from '../components/ParkingFeeBreakdown'
 import { Empty, Loading, Notice, PageHeader } from '../components/Ui'
+
+function CustomerCheckout({ session, token }) {
+  const navigate = useNavigate()
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const base = '/api/parking-sessions/mine/' + session.id
+  const quote = useResource(open ? base + '/checkout-quote' : null, token)
+  const billPage = '/payments?session=' + session.id
+  const charge = quote.data?.charge
+
+  async function confirmCheckout() {
+    setBusy(true)
+    setError('')
+    try {
+      await api(base + '/check-out', { method: 'POST', token, body: { expectedFee: charge.total } })
+      navigate(billPage)
+    } catch (cause) {
+      setError(cause.message)
+      if (cause.status === 409) quote.refresh()
+    } finally { setBusy(false) }
+  }
+
+  return <section className="customer-checkout" aria-label="Trả xe và thanh toán">
+    {!open ? <div className="payment-actions">
+      <button type="button" className="button main-button" onClick={() => setOpen(true)}>Xem phí và trả xe</button>
+      <Link className="button light-button" to="/payments">Xem thanh toán</Link>
+    </div> : <>
+      {quote.loading && <Loading>Đang tính phí trả xe…</Loading>}
+      <Notice error={quote.error || error} />
+      {charge && <>
+        <div className="bill-amount"><span>Phí dự tính khi trả xe lúc này</span><strong>{money(charge.total)}</strong></div>
+        <ParkingFeeBreakdown charge={charge} />
+        <p className="helper-text">Chỉ xác nhận sau khi bạn đã đưa xe ra khỏi ô đỗ.</p>
+      </>}
+      <div className="payment-actions">
+        {charge && <button type="button" className="button main-button" disabled={busy} onClick={confirmCheckout}>
+          {busy ? 'Đang xác nhận…' : 'Xác nhận xe ra và thanh toán'}
+        </button>}
+        <button type="button" className="button light-button" disabled={busy} onClick={() => { setOpen(false); setError('') }}>Đóng</button>
+        {quote.error && <Link className="button light-button" to={billPage}>Xem hóa đơn</Link>}
+      </div>
+    </>}
+  </section>
+}
 
 export default function ParkedVehiclesPage() {
   const { token } = useAuth()
@@ -35,8 +83,9 @@ export default function ParkedVehiclesPage() {
             <div><dt>Bãi xe</dt><dd>{selected.lotName}<small>{selected.lotAddress}</small></dd></div>
             <div><dt>Loại xe</dt><dd>{vehicleType(selected.vehicleType)}</dd></div>
             <div><dt>Giờ vào bãi</dt><dd>{dateTime(selected.checkInUtc)}</dd></div>
+            {selected.scheduledEndUtc && <div><dt>Giờ lấy xe đã đặt</dt><dd>{dateTime(selected.scheduledEndUtc)}</dd></div>}
           </dl>
-          <p className="helper-text">Khi lấy xe, nhân viên tại cổng sẽ xác nhận xe ra.</p>
+          <CustomerCheckout key={selected.id} session={selected} token={token} />
         </>}
       </section>
       {selected && <BookingPreview map={map} lot={{ name: selected.lotName }} spotId={selected.parkingSpotId} parked />}

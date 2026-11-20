@@ -1,4 +1,5 @@
 using System.Data;
+using System.Linq.Expressions;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -7,13 +8,44 @@ using Npgsql;
 using Parking.Api.Contracts;
 using Parking.Api.Data;
 using Parking.Api.Models;
+using Parking.Api.Services;
 
 namespace Parking.Api.Controllers;
 
 [ApiController, Authorize]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [Route("api/reservations")]
-public sealed class ReservationsController(ParkingDbContext db) : ControllerBase
+public sealed class ReservationsController(ParkingDbContext db, ParkingPricing pricing) : ControllerBase
 {
+    private string OwnerId => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+
+    private IQueryable<Reservation> OperationalReservations()
+    {
+        var lotIds = db.OperationalLots(User).Select(lot => lot.Id);
+        return db.Reservations.Where(r => lotIds.Contains(r.ParkingSpot.ParkingLotId));
+    }
+
+    private static Expression<Func<Reservation, ReservationDetails>> Details(DateTime now) => r => new(
+        r.Id, r.VehicleId, r.Vehicle.PlateNumber, r.ParkingSpotId, r.ParkingSpot.Code,
+        r.ParkingSpot.ParkingLotId, r.ParkingSpot.ParkingLot.Name, r.StartUtc, r.EndUtc, r.CreatedAtUtc,
+        r.Status == ReservationStatus.Pending && r.StartUtc <= now ? ReservationStatus.Expired : r.Status,
+        r.ReviewedAtUtc, r.RejectionReason,
+        (r.Status == ReservationStatus.Active && r.EndUtc > now) || (r.Status == ReservationStatus.Pending && r.StartUtc > now),
+        r.EstimatedFee);
+
+    private sealed record ReservationDetails(int Id, int VehicleId, string PlateNumber, int ParkingSpotId,
+        string SpotCode, int LotId, string LotName, DateTime StartUtc, DateTime EndUtc, DateTime CreatedAtUtc,
+        ReservationStatus Status, DateTime? ReviewedAtUtc, string? RejectionReason, bool CanCancel, decimal? EstimatedFee);
+
+    [HttpGet("pending")]
+    [Authorize(Roles = "Admin,Staff")]
+    public async Task<IActionResult> Pending(CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        return Ok(await OperationalReservations().AsNoTracking().Where(r => r.Status == ReservationStatus.Pending && r.StartUtc > now)
+            .OrderBy(r => r.StartUtc).ThenBy(r => r.Id).Select(Details(now)).ToListAsync(ct));
+    }
+
     [HttpGet("active")]
     [Authorize(Roles = "Admin,Staff")]
     public async Task<IActionResult> Active([FromQuery] string plate, CancellationToken ct)
@@ -21,7 +53,7 @@ public sealed class ReservationsController(ParkingDbContext db) : ControllerBase
         var term = plate?.Trim().ToUpperInvariant();
         if (string.IsNullOrWhiteSpace(term) || term.Length < 2) return BadRequest("Nhập ít nhất 2 ký tự biển số.");
         var now = DateTime.UtcNow;
-        return Ok(await db.Reservations.AsNoTracking()
+        return Ok(await OperationalReservations().AsNoTracking()
             .Where(r => r.Status == ReservationStatus.Active && r.EndUtc >= now && r.Vehicle.PlateNumber.Contains(term))
             .OrderBy(r => r.StartUtc).Take(20)
             .Select(r => new { r.Id, r.VehicleId, r.Vehicle.PlateNumber, r.ParkingSpotId,
@@ -31,23 +63,42 @@ public sealed class ReservationsController(ParkingDbContext db) : ControllerBase
     [HttpGet("mine")]
     public async Task<IActionResult> Mine(CancellationToken ct)
     {
-        var ownerId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        var ownerId = OwnerId;
         return Ok(await db.Reservations.AsNoTracking()
             .Where(r => r.OwnerId == ownerId)
-            .OrderByDescending(r => r.CreatedAtUtc)
-            .Select(r => new { r.Id, r.VehicleId, r.ParkingSpotId, r.StartUtc, r.EndUtc, r.Status })
+            .OrderByDescending(r => r.CreatedAtUtc).ThenByDescending(r => r.Id)
+            .Select(Details(DateTime.UtcNow))
             .ToListAsync(ct));
+    }
+
+    [HttpGet("arrivals")]
+    [Authorize(Roles = "Admin,Staff")]
+    public async Task<IActionResult> Arrivals(CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var until = now.AddDays(1);
+        return Ok(await OperationalReservations().AsNoTracking()
+            .Where(r => r.Status == ReservationStatus.Active && r.EndUtc >= now && r.StartUtc < until)
+            .OrderBy(r => r.StartUtc).ThenBy(r => r.Id)
+            .Select(r => new
+            {
+                r.Id, r.VehicleId, r.Vehicle.PlateNumber, r.ParkingSpotId, r.ParkingSpot.Code,
+                LotId = r.ParkingSpot.ParkingLotId, r.StartUtc, r.EndUtc,
+                CanCheckIn = r.StartUtc <= now && r.ParkingSpot.IsActive && !db.ParkingSessions.Any(session =>
+                    session.CheckOutUtc == null && (session.ParkingSpotId == r.ParkingSpotId || session.VehicleId == r.VehicleId))
+            }).ToListAsync(ct));
     }
 
     [HttpPost]
     public async Task<IActionResult> Create(CreateReservationRequest request, CancellationToken ct)
     {
-        var ownerId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        var ownerId = OwnerId;
         var now = DateTime.UtcNow;
         if (request.StartUtc.Kind != DateTimeKind.Utc || request.EndUtc.Kind != DateTimeKind.Utc ||
-            request.StartUtc <= now || request.EndUtc <= request.StartUtc ||
-            request.EndUtc - request.StartUtc > TimeSpan.FromDays(1))
-            return BadRequest("Thời gian phải là UTC trong tương lai và tối đa 24 giờ.");
+            request.StartUtc <= now || request.EndUtc <= request.StartUtc)
+            return BadRequest("Giờ đến phải ở trong tương lai và giờ lấy xe phải sau giờ đến.");
+        if (request.EndUtc - request.StartUtc > ReservationQueries.MaxDuration)
+            return BadRequest("Mỗi lượt chỉ được đặt tối đa 30 ngày.");
 
         try
         {
@@ -58,17 +109,22 @@ public sealed class ReservationsController(ParkingDbContext db) : ControllerBase
             var spot = await db.ParkingSpots.AsNoTracking()
                 .FirstOrDefaultAsync(s => s.Id == request.ParkingSpotId && s.IsActive, ct);
             if (spot is null || spot.Type != vehicle.Type) return BadRequest("Chỗ đỗ không phù hợp.");
+            var rate = pricing.For(spot.Type);
+            var estimate = ParkingPricing.Calculate(rate, request.StartUtc, request.EndUtc, request.EndUtc);
+            if (request.ExpectedFee is { } expected && estimate.Total != expected)
+                return Conflict("Biểu giá vừa thay đổi. Vui lòng xem lại mức phí dự kiến.");
             if (await db.ParkingSessions.AnyAsync(s => s.ParkingSpotId == spot.Id && s.CheckOutUtc == null, ct))
                 return Conflict("Chỗ đang có xe gửi.");
-            if (await db.Reservations.AnyAsync(r => (r.ParkingSpotId == spot.Id || r.VehicleId == vehicle.Id) &&
-                    r.Status == ReservationStatus.Active &&
-                    r.EndUtc > now && r.StartUtc < request.EndUtc && request.StartUtc < r.EndUtc, ct))
+            if (await db.Reservations.HoldingBetween(request.StartUtc, request.EndUtc, now)
+                    .AnyAsync(r => r.ParkingSpotId == spot.Id || r.VehicleId == vehicle.Id, ct))
                 return Conflict("Chỗ hoặc xe đã có lịch đặt trong khoảng thời gian này.");
 
             var reservation = new Reservation
             {
                 OwnerId = ownerId, VehicleId = vehicle.Id, ParkingSpotId = spot.Id,
-                StartUtc = request.StartUtc, EndUtc = request.EndUtc
+                StartUtc = request.StartUtc, EndUtc = request.EndUtc, Status = ReservationStatus.Pending,
+                BookedHourlyRate = rate.HourlyRate, BookedEarlyExitFee = rate.EarlyExitFee,
+                BookedLateDailyFee = rate.LateDailyFee, BookedSurcharge = rate.Surcharge, EstimatedFee = estimate.Total
             };
             db.Reservations.Add(reservation);
             await db.SaveChangesAsync(ct);
@@ -76,10 +132,14 @@ public sealed class ReservationsController(ParkingDbContext db) : ControllerBase
             return Created($"/api/reservations/{reservation.Id}", new
             {
                 reservation.Id, reservation.VehicleId, reservation.ParkingSpotId,
-                reservation.StartUtc, reservation.EndUtc, reservation.Status
+                reservation.StartUtc, reservation.EndUtc, reservation.Status, reservation.EstimatedFee
             });
         }
         catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.SerializationFailure)
+        {
+            return Conflict("Chỗ vừa được người khác đặt. Vui lòng thử lại.");
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.SerializationFailure })
         {
             return Conflict("Chỗ vừa được người khác đặt. Vui lòng thử lại.");
         }
@@ -88,11 +148,11 @@ public sealed class ReservationsController(ParkingDbContext db) : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id, CancellationToken ct)
     {
-        var ownerId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-        var canManage = User.IsInRole("Admin") || User.IsInRole("Staff");
+        var ownerId = OwnerId;
+        var reviewable = OperationalReservations().Where(r => r.Id == id);
         var reservation = await db.Reservations.AsNoTracking()
-            .Where(r => r.Id == id && (r.OwnerId == ownerId || canManage))
-            .Select(r => new { r.Id, r.VehicleId, r.ParkingSpotId, r.StartUtc, r.EndUtc, r.Status })
+            .Where(r => r.Id == id && (r.OwnerId == ownerId || reviewable.Any(x => x.Id == r.Id)))
+            .Select(Details(DateTime.UtcNow))
             .FirstOrDefaultAsync(ct);
         return reservation is null ? NotFound() : Ok(reservation);
     }
@@ -100,14 +160,42 @@ public sealed class ReservationsController(ParkingDbContext db) : ControllerBase
     [HttpPost("{id:int}/cancel")]
     public async Task<IActionResult> Cancel(int id, CancellationToken ct)
     {
-        var ownerId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        var ownerId = OwnerId;
         var isAdmin = User.IsInRole("Admin");
-        var reservation = await db.Reservations.FirstOrDefaultAsync(r => r.Id == id &&
-            (r.OwnerId == ownerId || isAdmin), ct);
-        if (reservation is null) return NotFound();
-        if (reservation.Status != ReservationStatus.Active) return Conflict("Đặt chỗ không còn hiệu lực.");
-        reservation.Status = ReservationStatus.Cancelled;
-        await db.SaveChangesAsync(ct);
-        return NoContent();
+        var now = DateTime.UtcNow;
+        var owned = db.Reservations.Where(r => r.Id == id && (r.OwnerId == ownerId || isAdmin));
+        var updated = await owned.Where(r => (r.Status == ReservationStatus.Active && r.EndUtc > now) ||
+                (r.Status == ReservationStatus.Pending && r.StartUtc > now))
+            .ExecuteUpdateAsync(setter => setter.SetProperty(r => r.Status, ReservationStatus.Cancelled), ct);
+        if (updated != 0) return NoContent();
+        return await owned.AnyAsync(ct) ? Conflict("Đặt chỗ không còn hiệu lực.") : NotFound();
+    }
+
+    [HttpPost("{id:int}/approve")]
+    [Authorize(Roles = "Admin,Staff")]
+    public Task<IActionResult> Approve(int id, CancellationToken ct) => Review(id, null, ct);
+
+    [HttpPost("{id:int}/reject")]
+    [Authorize(Roles = "Admin,Staff")]
+    public async Task<IActionResult> Reject(int id, RejectReservationRequest request, CancellationToken ct)
+    {
+        var reason = request.Reason.Trim();
+        if (reason.Length == 0) return BadRequest("Nhập lý do từ chối.");
+        return await Review(id, reason, ct);
+    }
+
+    private async Task<IActionResult> Review(int id, string? reason, CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var scoped = OperationalReservations().Where(r => r.Id == id);
+        var pending = scoped.Where(r => r.Status == ReservationStatus.Pending && r.StartUtc > now);
+        if (reason is null) pending = pending.Where(r => r.ParkingSpot.IsActive);
+        var status = reason is null ? ReservationStatus.Active : ReservationStatus.Rejected;
+        var updated = await pending.ExecuteUpdateAsync(setter => setter
+            .SetProperty(r => r.Status, status)
+            .SetProperty(r => r.ReviewedAtUtc, now)
+            .SetProperty(r => r.RejectionReason, reason), ct);
+        if (updated != 0) return NoContent();
+        return await scoped.AnyAsync(ct) ? Conflict("Yêu cầu đã được xử lý, quá giờ đến hoặc ô đỗ đã đóng.") : NotFound();
     }
 }

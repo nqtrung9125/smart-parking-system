@@ -1,5 +1,7 @@
 import { lazy, Suspense, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
+import { useAuth } from '../auth/useAuth'
+import { portalFor } from '../lib/portal'
 import { useResource } from '../lib/useResource'
 import { PageHeader, Loading, Notice, Empty } from '../components/Ui'
 import { spotStatus, vehicleType } from '../lib/format'
@@ -11,10 +13,19 @@ const groups = { Available: 'Trống', Occupied: 'Có xe', Reserved: 'Đã đặ
 
 export default function LotDetailPage() {
   const { id } = useParams()
-  return <LotDetail key={id} id={id} />
+  const { user, token } = useAuth()
+  const isStaff = portalFor(user) === 'staff'
+  const assigned = useResource(isStaff ? '/api/parking-lots/assigned' : null, token)
+  if (isStaff && !assigned.data?.some((lot) => lot.id === Number(id))) {
+    return <main className="page-wrap">
+      <PageHeader title="Bãi phụ trách" actions={<Link className="button light-button" to="/#lots">Về danh sách bãi</Link>} />
+      {assigned.loading ? <Loading /> : assigned.error ? <Notice error={assigned.error} /> : <Empty>Bãi này không nằm trong danh sách bạn phụ trách.</Empty>}
+    </main>
+  }
+  return <LotDetail key={id} id={id} isStaff={isStaff} />
 }
 
-function LotDetail({ id }) {
+function LotDetail({ id, isStaff }) {
   const lot = useResource('/api/parking-lots/' + id)
   const map = useResource('/api/parking-spots/map?parkingLotId=' + id)
   const [mode, setMode] = useState('2D')
@@ -38,7 +49,7 @@ function LotDetail({ id }) {
         {!spots.length ? <Empty>Không có vị trí đỗ cho bộ lọc này.</Empty> : mode === '3D' ?
           <Suspense fallback={<Loading>Đang tải sơ đồ 3D…</Loading>}><SpotScene spots={all} filter={filter} selectedId={selectedId} onSelect={(spot) => setSelectedId(spot.id)} /></Suspense> :
           <div className="detail-map"><div className="detail-lane">LỐI DI CHUYỂN →</div><div className="detail-spots">{spots.map((spot) => <button type="button" key={spot.id} aria-pressed={selectedId === spot.id} onClick={() => setSelectedId(spot.id)} className={'detail-spot status-' + spot.status.toLowerCase()}><strong>{spot.code}</strong><span>{vehicleType(spot.type)}</span>{selectedId === spot.id && <svg className="tile-vehicle" width="32" height="24" viewBox="0 0 32 24" aria-hidden="true">{spot.type === 2 ? <path d="M3 13l3-6h17l4 6v7h-3v-3H7v3H4v-3H2v-4zm5-4-2 4h18l-2-4z" fill="currentColor" /> : <><circle cx="7" cy="17" r="4" /><circle cx="25" cy="17" r="4" /><path d="M7 17l5-8h7l6 8m-9-8 3 7h-7m9-10h4" /></>}</svg>}<em>{spotStatus[spot.status]}</em></button>)}</div></div>}
-        <div className="map-selection" aria-live="polite"><span>{selected ? selected.code + ' · ' + vehicleType(selected.type) + ' · ' + spotStatus[selected.status] : 'Chọn một vị trí để xem chi tiết.'}{selected && <small className="map-marker-note">Xe màu ngọc lam đánh dấu ô bạn đang chọn.</small>}</span><Link to={booking} className="button main-button">{selected?.status === 'Available' ? 'Đặt chỗ ' + selected.code : 'Đặt chỗ tại bãi'}</Link></div>
+        <div className="map-selection" aria-live="polite"><span>{selected ? selected.code + ' · ' + vehicleType(selected.type) + ' · ' + spotStatus[selected.status] : 'Chọn một vị trí để xem chi tiết.'}{selected && <small className="map-marker-note">Xe màu ngọc lam đánh dấu ô bạn đang chọn.</small>}</span>{!isStaff && <Link to={booking} className="button main-button">{selected?.status === 'Available' ? 'Đặt chỗ ' + selected.code : 'Đặt chỗ tại bãi'}</Link>}</div>
       </section>
       <ForecastPanel id={id} vehicleFilter={filter} />
     </>}

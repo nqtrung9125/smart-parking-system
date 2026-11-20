@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router'
 import { useAuth } from '../auth/useAuth'
 import { Field, Notice } from '../components/Ui'
 import ParkingArtwork from '../components/ParkingArtwork'
+import { portalFor, portalPaths } from '../lib/portal'
 
 export default function AuthPage({ register = false }) {
   const { login, register: createAccount } = useAuth()
@@ -23,7 +24,7 @@ export default function AuthPage({ register = false }) {
     try {
       const factor = secondStep ? { [useRecovery ? 'twoFactorRecoveryCode' : 'twoFactorCode']: code.trim() } : undefined
       const profile = await (register ? createAccount(email.trim(), password) : login(email.trim(), password, factor))
-      const destination = location.state?.from || (profile.roles.includes('Admin') ? '/admin' : profile.roles.includes('Staff') ? '/staff/check-in' : '/account')
+      const destination = location.state?.from || portalPaths[portalFor(profile)]
       navigate(destination, { replace: true })
     } catch (cause) {
       if (!register && cause.detail === 'RequiresTwoFactor') setSecondStep(true)

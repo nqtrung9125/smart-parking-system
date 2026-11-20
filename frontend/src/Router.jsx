@@ -6,37 +6,71 @@ import AuthPage from './pages/AuthPage'
 import LotDetailPage from './pages/LotDetailPage'
 import VehiclesPage from './pages/VehiclesPage'
 import ReservationsPage from './pages/ReservationsPage'
+import ReservationReviewPage from './pages/ReservationReviewPage'
 import HistoryPage from './pages/HistoryPage'
 import { StaffCheckInPage, StaffCheckOutPage } from './pages/StaffPages'
 import { AdminDashboardPage, AdminManagePage } from './pages/AdminPages'
 import SecurityPage from './pages/SecurityPage'
 import AccountPage from './pages/AccountPage'
 import ParkedVehiclesPage from './pages/ParkedVehiclesPage'
+import CustomerDashboardPage from './pages/CustomerDashboardPage'
+import CustomerPaymentsPage from './pages/CustomerPaymentsPage'
+import WalletPage from './pages/WalletPage'
+import WalletReviewPage from './pages/WalletReviewPage'
+import RevenuePage from './pages/RevenuePage'
+import PortalLayout from './components/PortalLayout'
+import { useAuth } from './auth/useAuth'
 
 export default function AppRouter() {
   const { pathname, hash } = useLocation()
+  const { ready } = useAuth()
   useEffect(() => {
+    if (!ready) return
     const anchor = hash && document.getElementById(hash.slice(1))
-    if (anchor) anchor.scrollIntoView()
+    if (anchor) anchor.scrollIntoView({ behavior: 'instant' })
     else window.scrollTo({ top: 0, behavior: 'instant' })
-  }, [pathname, hash])
+  }, [pathname, hash, ready])
 
   return <Routes>
-    <Route path="/" element={<Home />} />
-    <Route element={<Layout />}>
+    <Route element={<Layout matchPortal />}>
+      <Route path="/" element={<Home />} />
       <Route path="/lots/:id" element={<LotDetailPage />} />
+    </Route>
+    <Route element={<Layout />}>
       <Route path="/login" element={<AuthPage key="login" />} />
       <Route path="/register" element={<AuthPage key="register" register />} />
-      <Route path="/security" element={<RequireAuth><SecurityPage /></RequireAuth>} />
-      <Route path="/account" element={<RequireAuth><AccountPage /></RequireAuth>} />
-      <Route path="/vehicles" element={<RequireAuth><VehiclesPage /></RequireAuth>} />
-      <Route path="/reservations" element={<RequireAuth><ReservationsPage /></RequireAuth>} />
-      <Route path="/parked" element={<RequireAuth><ParkedVehiclesPage /></RequireAuth>} />
-      <Route path="/history" element={<RequireAuth><HistoryPage /></RequireAuth>} />
-      <Route path="/staff/check-in" element={<RequireAuth roles={['Admin', 'Staff']}><StaffCheckInPage /></RequireAuth>} />
-      <Route path="/staff/check-out" element={<RequireAuth roles={['Admin', 'Staff']}><StaffCheckOutPage /></RequireAuth>} />
-      <Route path="/admin" element={<RequireAuth roles={['Admin']}><AdminDashboardPage /></RequireAuth>} />
-      <Route path="/admin/manage" element={<RequireAuth roles={['Admin']}><AdminManagePage /></RequireAuth>} />
+    </Route>
+    <Route element={<RequireAuth />}>
+      <Route element={<PortalLayout />}>
+        <Route path="/security" element={<SecurityPage />} />
+        <Route path="/account" element={<AccountPage />} />
+      </Route>
+      <Route element={<PortalLayout area="customer" />}>
+        <Route path="/my-parking" element={<CustomerDashboardPage />} />
+        <Route path="/vehicles" element={<VehiclesPage />} />
+        <Route path="/reservations" element={<ReservationsPage />} />
+        <Route path="/parked" element={<ParkedVehiclesPage />} />
+        <Route path="/history" element={<HistoryPage />} />
+        <Route path="/payments" element={<CustomerPaymentsPage />} />
+        <Route path="/wallet" element={<WalletPage />} />
+      </Route>
+    </Route>
+    <Route element={<RequireAuth roles={['Admin', 'Staff']} />}>
+      <Route element={<PortalLayout area="staff" />}>
+        <Route path="/staff/check-in" element={<StaffCheckInPage />} />
+        <Route path="/staff/check-out" element={<StaffCheckOutPage />} />
+        <Route path="/staff/reservations" element={<ReservationReviewPage />} />
+        <Route path="/staff/revenue" element={<RevenuePage />} />
+      </Route>
+    </Route>
+    <Route element={<RequireAuth roles={['Admin']} />}>
+      <Route element={<PortalLayout area="admin" />}>
+        <Route path="/admin" element={<AdminDashboardPage />} />
+        <Route path="/admin/manage" element={<AdminManagePage />} />
+        <Route path="/admin/reservations" element={<ReservationReviewPage />} />
+        <Route path="/admin/wallet" element={<WalletReviewPage />} />
+        <Route path="/admin/revenue" element={<RevenuePage />} />
+      </Route>
     </Route>
     <Route path="*" element={<main className="page-wrap"><h1>Không tìm thấy trang</h1><a href="/">Về trang chủ</a></main>} />
   </Routes>

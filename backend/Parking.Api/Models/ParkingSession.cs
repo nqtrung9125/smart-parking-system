@@ -12,4 +12,10 @@ public class ParkingSession
     public DateTime CheckInUtc { get; set; } = DateTime.UtcNow;
     public DateTime? CheckOutUtc { get; set; }
     public decimal? Fee { get; set; }
+    public int? BillableHours { get; set; }
+    public decimal? BaseFee { get; set; }
+    public decimal EarlyExitFee { get; set; }
+    public int LateDays { get; set; }
+    public decimal LateFee { get; set; }
+    public decimal Surcharge { get; set; }
 }

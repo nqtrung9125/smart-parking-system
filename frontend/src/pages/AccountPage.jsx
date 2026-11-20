@@ -4,13 +4,16 @@ import { useAuth } from '../auth/useAuth'
 import { api } from '../lib/api'
 import { useResource } from '../lib/useResource'
 import { initials, roleNames } from '../lib/format'
+import { portalFor, portalPaths } from '../lib/portal'
 import { Field, Notice, PageHeader } from '../components/Ui'
 
 export default function AccountPage() {
   const { user, token, logout, setProfile } = useAuth()
   const navigate = useNavigate()
-  const vehicles = useResource('/api/vehicles/mine', token)
-  const reservations = useResource('/api/reservations/mine', token)
+  const area = portalFor(user)
+  const customer = area === 'customer'
+  const vehicles = useResource(customer ? '/api/vehicles/mine' : null, token)
+  const reservations = useResource(customer ? '/api/reservations/mine' : null, token)
   const [displayName, setName] = useState(user.displayName || '')
   const [contactPhone, setPhone] = useState(user.contactPhone || '')
   const [busy, setBusy] = useState(false)
@@ -37,7 +40,8 @@ export default function AccountPage() {
     <PageHeader eyebrow="KHU VỰC CÁ NHÂN" title="Thông tin tài khoản" description="Xem thông tin đăng nhập, quản lý hồ sơ và bảo mật." />
     <section className="account-overview" aria-label="Tổng quan tài khoản">
       <div className="profile-identity"><span className="account-avatar profile-avatar" aria-hidden="true">{initials(user.displayName || user.email?.split('@')[0])}</span><div><span className="profile-overline">HỒ SƠ CÁ NHÂN</span><h2>{display}</h2><p>{user.email}</p><div className="profile-roles">{roleNames(user.roles).map((role) => <span key={role}>{role}</span>)}</div></div></div>
-      <div className="profile-metrics"><Link to="/vehicles"><strong>{vehicles.data?.length ?? '—'}</strong> Xe đã lưu</Link><Link to="/reservations"><strong>{reservations.data?.filter((row) => row.status === 1 && Date.parse(row.endUtc) > loadedAt).length ?? '—'}</strong> Lịch đang hiệu lực</Link></div>
+      {customer ? <div className="profile-metrics"><Link to="/vehicles"><strong>{vehicles.data?.length ?? '—'}</strong> Xe đã lưu</Link><Link to="/reservations"><strong>{reservations.data?.filter((row) => row.status === 1 && Date.parse(row.endUtc) > loadedAt).length ?? '—'}</strong> Lịch đang hiệu lực</Link></div> :
+        <Link className="button portal-hero-action" to={portalPaths[area]}>{area === 'admin' ? 'Về trang quản trị' : 'Về ca trực'}</Link>}
     </section>
     <div className="two-column section-gap">
       <form className="panel" onSubmit={save}>

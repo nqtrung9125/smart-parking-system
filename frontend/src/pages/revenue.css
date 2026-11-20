@@ -1,0 +1,56 @@
+.revenue-page { display: flex; flex-direction: column; }
+.revenue-filters, .revenue-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+.revenue-filters .field { margin: 0; }
+.revenue-kpi { display: grid; gap: 8px; }
+.revenue-kpi span, .revenue-breakdown span { color: var(--portal-muted); font-size: 13px; }
+.revenue-kpi strong { font-size: clamp(21px, 2.4vw, 30px); overflow-wrap: anywhere; }
+.revenue-chart { margin-bottom: 16px; }
+.revenue-scroll { max-width: 100%; overflow-x: auto; padding: 3px; }
+.revenue-bars {
+  display: grid;
+  grid-template-columns: repeat(var(--bucket-count), minmax(23px, 1fr));
+  min-width: calc(var(--bucket-count) * 23px);
+  gap: 3px;
+  margin-block: 14px;
+}
+.revenue-bar {
+  display: grid;
+  grid-template-rows: 176px 19px;
+  gap: 5px;
+  min-width: 0;
+  padding: 3px 2px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--portal-muted);
+  background: none;
+  text-align: center;
+}
+.revenue-bar:hover, .revenue-bar[aria-pressed=true] { background: var(--portal-tint); border-color: var(--portal-accent); }
+.revenue-bar-track {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: repeating-linear-gradient(to top, var(--portal-border), var(--portal-border) 1px, transparent 1px, transparent 25%);
+}
+.revenue-bar-fill {
+  width: min(72%, 27px);
+  height: var(--bar-size);
+  min-height: 2px;
+  border-radius: 5px 5px 1px 1px;
+  background: var(--portal-accent);
+}
+.revenue-bar-label { font-size: 11px; white-space: nowrap; }
+.revenue-breakdown { display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: center; padding: 12px; border-radius: 10px; background: var(--portal-background); }
+.revenue-breakdown h3 { margin: 0 0 5px; font-size: 14px; }
+.revenue-breakdown dl { display: flex; flex-wrap: wrap; gap: 10px 25px; margin: 0; }
+.revenue-breakdown dt { color: var(--portal-muted); font-size: 12px; }
+.revenue-breakdown dd { margin: 2px 0 0; font-size: 14px; font-weight: 700; }
+.revenue-table table { border-collapse: collapse; text-align: right; width: 100%; white-space: nowrap; }
+.revenue-table th, .revenue-table td { padding: 10px 12px; border-bottom: 1px solid var(--portal-border); }
+.revenue-table tr > :first-child { text-align: left; }
+.revenue-table thead, .revenue-selected { background: var(--portal-tint); }
+@media (max-width: 680px) {
+  .revenue-filters { grid-template-columns: minmax(0, 1fr); }
+  .revenue-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .revenue-kpi:first-child { grid-column: 1 / -1; }
+}
