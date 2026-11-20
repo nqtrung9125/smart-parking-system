@@ -100,6 +100,20 @@ Nếu dùng profile **http**, đổi `VITE_API_BASE_URL` thành `http://localhos
 | API mới trả về 404 hoặc thiếu bảng | Build lại backend, chạy migration và khởi động lại API. |
 | Nhân viên không thấy bãi | Đăng nhập Admin, mở **Nhân viên → Phân công bãi** và lưu bãi phụ trách. Sau khi vừa cấp vai trò Nhân viên, đăng nhập lại. |
 
+## Ba tài khoản mẫu để chạy thử local
+
+Các tài khoản dưới đây có hiệu lực sau khi tạo theo hướng dẫn. Dùng chúng cho bản cài đặt local phục vụ học tập.
+
+| Vai trò | Email mẫu | Mật khẩu mẫu | Có thể thử |
+| --- | --- | --- | --- |
+| Admin | `admin@example.test` | `ParkingAdmin!4729` | Quản lý bãi, phân công nhân viên, xem doanh thu mọi bãi |
+| Nhân viên | `staff@example.test` | `ParkingStaff!5731` | Duyệt đặt chỗ, nhận xe, trả xe và xem doanh thu bãi phụ trách |
+| Khách hàng | `customer@example.test` | `ParkingCustomer!6843` | Đăng ký xe, đặt chỗ, xác nhận xe ra và thanh toán |
+
+1. **Admin.** Khi chạy bước cấu hình API trên database mới, giữ email `admin@example.test` và nhập mật khẩu mẫu của Admin, sau đó khởi động API với profile **https**.
+2. **Khách hàng và Nhân viên.** Mở **Đăng ký** hai lần, mỗi lần dùng email và mật khẩu tương ứng trong bảng. Nếu còn đăng nhập bằng tài khoản trước, đăng xuất trước khi đăng ký tài khoản kế tiếp. [Đăng ký trên máy local](http://localhost:5173/register)
+3. **Phân công bãi.** Đăng nhập Admin, mở **Nhân viên**, cấp quyền cho `staff@example.test`, rồi bấm **Phân công bãi**. Chọn **Bãi xe Bạch Đằng** nếu đã nạp dữ liệu Đà Nẵng, hoặc chọn bãi bạn đã tạo. Đăng nhập lại bằng tài khoản Nhân viên để thấy bãi trong trang **Doanh thu**. [Đăng nhập trên máy local](http://localhost:5173/login)
+
 ## Dữ liệu Đà Nẵng và bộ học máy
 
 Sau bước migration, chạy từ thư mục gốc:
