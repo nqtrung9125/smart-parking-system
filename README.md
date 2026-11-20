@@ -1,6 +1,6 @@
 # Smart Parking System
 
-Backend ASP.NET Core Web API (.NET 10) và PostgreSQL cho Smart Parking. Giao diện React nằm trên nhánh `frontend` và `main`.
+Backend ASP.NET Core Web API (.NET 10) và PostgreSQL cho Smart Parking. Giao diện React nằm trên nhánh `frontend` và `main`. [Hướng dẫn cài đặt toàn bộ hệ thống](https://github.com/nqtrung9125/smart-parking-system/blob/main/README.md)
 
 ## Chạy trên máy mới
 
@@ -21,7 +21,7 @@ Backend ASP.NET Core Web API (.NET 10) và PostgreSQL cho Smart Parking. Giao di
    dotnet tool restore
    $env:ASPNETCORE_ENVIRONMENT = "Development"
    dotnet tool run dotnet-ef database update --project backend/Parking.Api --startup-project backend/Parking.Api
-   dotnet run --project backend/Parking.Api
+   dotnet run --project backend/Parking.Api --launch-profile http
    ```
 
 Visual Studio 2026 có thể mở `backend/Parking.Api/Parking.Api.csproj`. Khi chạy bằng profile `https`, API ở `https://localhost:7171`; profile `http` ở `http://localhost:5181`. Cần tin cậy chứng chỉ phát triển với `dotnet dev-certs https --trust` nếu trình duyệt báo lỗi HTTPS.
@@ -37,26 +37,37 @@ Sau khi chạy migration, có thể thêm các bãi mẫu tại Đà Nẵng bằ
 | Chỗ đỗ | `GET /api/parking-spots`; POST và PATCH `/{id}/active` | Công khai để xem, Admin/Staff để sửa |
 | Xe | `GET /api/vehicles/mine`, `POST /api/vehicles` | Đã đăng nhập |
 | Đặt chỗ | `GET /api/reservations/mine`, `POST /api/reservations`, `POST /{id}/cancel` | Đã đăng nhập |
+| Duyệt đặt chỗ | `GET /api/reservations/pending`, `POST /api/reservations/{id}/approve`, `POST /api/reservations/{id}/reject` | Admin hoặc Staff phụ trách bãi |
+| Lịch xe vào theo bãi | `GET /api/reservations/arrivals` | Admin hoặc Staff phụ trách bãi |
 | Gửi xe | `POST /api/parking-sessions/check-in`, `POST /{id}/check-out`, `GET /active` | Admin/Staff |
+| Khách trả xe | `GET /api/parking-sessions/mine/{id}/checkout-quote`, `POST /api/parking-sessions/mine/{id}/check-out` | Chủ lượt gửi |
+| Bảng giá và phí dự kiến | `GET /api/pricing`, `GET /api/pricing/estimate` | Công khai |
 | Lịch sử gửi xe | `GET /api/parking-sessions/mine` | Đã đăng nhập |
-| Tìm xe đang gửi | `GET /api/parking-sessions/mine/active` | Chủ xe |
+| Tìm xe đang gửi | `GET /api/parking-sessions/mine/active` | Chủ xe, từ lúc nhân viên nhận xe đến khi xác nhận xe ra |
 | Thanh toán | `POST /api/payments/parking-session/{id}` | Admin/Staff |
+| Phí và lịch sử thanh toán | `GET /api/payments/mine` | Chủ xe |
+| Số dư và nạp tiền | `GET /api/wallet/mine`, `POST /api/wallet/top-ups` | Chủ tài khoản |
+| Duyệt nạp số dư | `GET /api/wallet/top-ups/pending`, `POST /api/wallet/top-ups/{id}/approve` | Admin |
+| Trả phí bằng số dư | `POST /api/payments/parking-session/{id}/balance` | Chủ lượt gửi |
 | Thống kê | `GET /api/dashboard/summary` | Admin/Staff |
-| Nhân viên | `POST /api/admin/staff`, `DELETE /api/admin/staff/{id}` | Admin |
-| Hồ sơ tài khoản | `GET /api/me`, `PUT /api/me` | Chủ tài khoản |
+| Báo cáo doanh thu | `GET /api/dashboard/revenue?lotId=1&period=month&date=2026-11-01` | Admin hoặc Staff phụ trách bãi |
+| Nhân viên | `POST /api/admin/staff`, `PUT /api/admin/staff/{id}/lots`, `DELETE /api/admin/staff/{id}` | Admin |
+| Hồ sơ tài khoản | `GET /api/me`, `PUT /api/me` (tên hiển thị, số liên hệ) | Chủ tài khoản |
 | Tra xe và lịch đặt | `GET /api/vehicles/search?plate=`, `GET /api/reservations/active?plate=` | Admin/Staff |
 | Sơ đồ trạng thái | `GET /api/parking-spots/map?parkingLotId=` | Công khai |
-| Dự báo | `GET /api/parking-lots/{id}/forecast` với `period=hour`, `day` hoặc `week` | Công khai |
-| OTP | `GET /api/security/authenticator`, POST `/setup`, `/enable`, `/disable` cùng nhóm | Chủ tài khoản |
-| VietQR | `GET /api/payments/parking-session/{id}/transfer` | Admin/Staff |
+| Dự báo | `GET /api/parking-lots/{id}/forecast?period=hour\|day\|week&type=` | Công khai |
+| OTP | `GET /api/security/authenticator`; POST `/setup`, `/enable`, `/disable` | Đã đăng nhập |
+| Thông tin VietQR | `GET /api/payments/parking-session/{id}/transfer` | Chủ xe hoặc Admin/Staff, khi lượt gửi chưa thanh toán |
 | Thanh toán chưa thu | `GET /api/parking-sessions/unpaid` | Admin/Staff |
 
 `/api/auth/login?useCookies=false` trả về Identity bearer token; gửi token trong `Authorization: Bearer ...`. Đây là token của ASP.NET Identity, **không phải JWT**. Tài khoản đăng ký thường không tự có quyền Admin hoặc Staff. Admin có thể gán hoặc thu hồi quyền Staff; người dùng cần đăng nhập lại để token nhận quyền mới. Tài khoản Admin ban đầu chỉ được tạo trong môi trường Development qua User Secrets.
 
-Loại chỗ/xe: `1` = xe máy, `2` = ô tô. API dùng UTC; dự báo gộp ngày và tuần theo giờ Việt Nam. Phí mẫu: xe máy 5.000 đồng/giờ, ô tô 15.000 đồng/giờ, làm tròn lên tối thiểu một giờ. Thanh toán ghi nhận tiền mặt hoặc chuyển khoản đã đối soát; VietQR cần cấu hình `VietQr:BankBin`, `VietQr:AccountNumber` và `VietQr:AccountName` bằng User Secrets. CORS cho phép React tại `http://localhost:5173`.
+Loại chỗ xe gồm `1` cho xe máy và `2` cho ô tô. Một lượt đặt trước kéo dài tối đa 30 ngày. API nhận thời gian đặt chỗ theo UTC. Bảng giá hiển thị phí dự kiến khi khách chọn xe và thời gian đặt. Mức mặc định là 5.000 đồng/giờ cho xe máy và 15.000 đồng/giờ cho ô tô, làm tròn lên và tính tối thiểu một giờ theo thời gian đỗ thực tế.
+
+Đơn mới lưu mức giá lúc đặt. Ra trước phút hẹn cộng 5.000 đồng mỗi lượt. Ra sau phút hẹn cộng 20.000 đồng cho mỗi 24 giờ trễ bắt đầu. Phụ phí đặt trước mặc định là 0 đồng. Có thể chỉnh các khóa `ParkingPricing:MotorbikeHourlyRate`, `ParkingPricing:CarHourlyRate`, `ParkingPricing:EarlyExitFee`, `ParkingPricing:LateDailyFee` và `ParkingPricing:ReservationSurcharge` trong cấu hình API. Đơn đặt đã có trước lần cập nhật dùng giá gửi theo giờ như trước.
 
 ## Kiểm thử
 
-`tests/smoke.ps1` chạy kiểm thử API với một database riêng đã được migration. Cần đặt hai biến môi trường `PARKING_TEST_ADMIN_EMAIL` và `PARKING_TEST_ADMIN_PASSWORD` của tài khoản Admin trong database kiểm thử, rồi chạy API tại `http://127.0.0.1:5188` và `./tests/smoke.ps1`. Bài kiểm thử tạo dữ liệu mẫu; không chạy vào database thật.
+`tests/smoke.ps1` dùng PowerShell 7 và một database kiểm thử riêng đã chạy migration. Đặt `PARKING_TEST_ADMIN_EMAIL` và `PARKING_TEST_ADMIN_PASSWORD` theo Admin của database kiểm thử, chạy API tại `http://127.0.0.1:5188`, rồi chạy `./tests/smoke.ps1`. Bài kiểm thử tạo dữ liệu mẫu vào database đã cấu hình.
 
-OTP dùng ứng dụng xác thực và mã khôi phục một lần.
+Có thể thêm cờ `-ConfiguredTransfer` khi API kiểm thử đã cấu hình tài khoản nhận **giả lập** để kiểm tra luồng ghi nhận chuyển khoản. Không thực hiện chuyển tiền trong bài kiểm thử.

@@ -236,6 +236,17 @@ namespace Parking.Api.Migrations
                     b.ToTable("AccountProfiles");
                 });
 
+            modelBuilder.Entity("Parking.Api.Models.BankReceipt", b =>
+                {
+                    b.Property<string>("Code")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.HasKey("Code");
+
+                    b.ToTable("BankReceipts");
+                });
+
             modelBuilder.Entity("Parking.Api.Models.ParkingLot", b =>
                 {
                     b.Property<int>("Id")
@@ -270,13 +281,31 @@ namespace Parking.Api.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<decimal?>("BaseFee")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<int?>("BillableHours")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("CheckInUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime?>("CheckOutUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<decimal>("EarlyExitFee")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
                     b.Property<decimal?>("Fee")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<int>("LateDays")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("LateFee")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");
 
@@ -285,6 +314,10 @@ namespace Parking.Api.Migrations
 
                     b.Property<int?>("ReservationId")
                         .HasColumnType("integer");
+
+                    b.Property<decimal>("Surcharge")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
 
                     b.Property<int>("VehicleId")
                         .HasColumnType("integer");
@@ -361,6 +394,8 @@ namespace Parking.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("PaidAtUtc");
+
                     b.HasIndex("ParkingSessionId")
                         .IsUnique();
 
@@ -375,11 +410,31 @@ namespace Parking.Api.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<decimal>("BookedEarlyExitFee")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<decimal?>("BookedHourlyRate")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<decimal>("BookedLateDailyFee")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<decimal>("BookedSurcharge")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("EndUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal?>("EstimatedFee")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
 
                     b.Property<string>("OwnerId")
                         .IsRequired()
@@ -387,6 +442,13 @@ namespace Parking.Api.Migrations
 
                     b.Property<int>("ParkingSpotId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<DateTime?>("ReviewedAtUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("StartUtc")
                         .HasColumnType("timestamp with time zone");
@@ -406,6 +468,21 @@ namespace Parking.Api.Migrations
                     b.HasIndex("ParkingSpotId", "StartUtc", "EndUtc");
 
                     b.ToTable("Reservations");
+                });
+
+            modelBuilder.Entity("Parking.Api.Models.StaffParkingLot", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("text");
+
+                    b.Property<int>("ParkingLotId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("UserId", "ParkingLotId");
+
+                    b.HasIndex("ParkingLotId");
+
+                    b.ToTable("StaffParkingLots");
                 });
 
             modelBuilder.Entity("Parking.Api.Models.Vehicle", b =>
@@ -439,6 +516,63 @@ namespace Parking.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("Vehicles");
+                });
+
+            modelBuilder.Entity("Parking.Api.Models.WalletTopUp", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccountName")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("AccountNumber")
+                        .IsRequired()
+                        .HasMaxLength(25)
+                        .HasColumnType("character varying(25)");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<DateTime?>("ApprovedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ApprovedById")
+                        .HasColumnType("text");
+
+                    b.Property<string>("BankBin")
+                        .IsRequired()
+                        .HasMaxLength(6)
+                        .HasColumnType("character varying(6)");
+
+                    b.Property<string>("BankTransactionCode")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TransferReference")
+                        .IsRequired()
+                        .HasMaxLength(25)
+                        .HasColumnType("character varying(25)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TransferReference")
+                        .IsUnique();
+
+                    b.HasIndex("OwnerId", "CreatedAtUtc");
+
+                    b.ToTable("WalletTopUps");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -578,7 +712,37 @@ namespace Parking.Api.Migrations
                     b.Navigation("Vehicle");
                 });
 
+            modelBuilder.Entity("Parking.Api.Models.StaffParkingLot", b =>
+                {
+                    b.HasOne("Parking.Api.Models.ParkingLot", "ParkingLot")
+                        .WithMany()
+                        .HasForeignKey("ParkingLotId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ParkingLot");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Parking.Api.Models.Vehicle", b =>
+                {
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("Parking.Api.Models.WalletTopUp", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser", "Owner")
                         .WithMany()
