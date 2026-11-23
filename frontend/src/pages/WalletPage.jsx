@@ -46,13 +46,14 @@ export default function WalletPage() {
   }
 
   return <main className="page-wrap">
-    <PageHeader title="Số dư gửi xe" description="Nạp bằng VietQR và dùng số dư để trả phí gửi xe."
+    <PageHeader title="Số dư gửi xe" description="Nạp bằng VietQR để đặt cọc giữ chỗ và thanh toán phí gửi xe."
       actions={<button type="button" className="button light-button" disabled={wallet.loading || busy} onClick={wallet.refresh}>Cập nhật</button>} />
     <Notice error={error || wallet.error} />
     {wallet.loading ? <Loading /> : wallet.data && <>
       <div className="portal-card bills-total">
         <span className="portal-icon"><Icon name="wallet" /></span>
         <div><span>Số dư khả dụng</span><strong>{money(wallet.data.balance)}</strong></div>
+        <div><span>Cọc đang giữ</span><strong>{money(wallet.data.heldDeposit)}</strong></div>
         <Link to="/payments">Xem phí gửi xe →</Link>
       </div>
       <div className="two-column booking-grid wallet-grid">

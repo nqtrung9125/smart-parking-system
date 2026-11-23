@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import Icon from '../components/Icon'
 import { useAuth } from '../auth/useAuth'
-import ParkingArtwork from '../components/ParkingArtwork'
 import { Empty, Loading, Notice } from '../components/Ui'
 import { dateTime, reservationStates, reservationStatus } from '../lib/format'
 import { useResource } from '../lib/useResource'
@@ -32,7 +31,12 @@ export default function CustomerDashboardPage() {
         <p>Đặt chỗ trước khi đến và tìm đúng vị trí khi quay lại lấy xe.</p>
         <Link className="button portal-hero-action" to="/#lots">Khám phá bãi xe <Icon name="arrow" size={16} /></Link>
       </div>
-      <div className="customer-hero-art"><ParkingArtwork /></div>
+      <div className="trip-ticket"><Icon name="map" size={24} /><span>{sessions.data?.length ? 'Xe đang gửi' : 'Lịch đặt tiếp theo'}</span>
+        {sessions.loading || reservations.loading ? <strong>Đang tải…</strong> : sessions.error || reservations.error ? <strong>Chưa tải được lượt gửi</strong> : sessions.data?.length ?
+          <><strong>{sessions.data[0].plateNumber}</strong><small>{sessions.data[0].lotName} · Ô {sessions.data[0].spotCode}</small><Link to={'/parked?session=' + sessions.data[0].id}>Xem vị trí xe ↗</Link></> :
+          upcoming.length ? <><strong>{dateTime(upcoming[0].startUtc)}</strong><Link to="/reservations">Xem lịch #{upcoming[0].id} ↗</Link></> :
+          <><strong>Chưa có lịch đặt</strong><Link to="/parking-search">Tìm bãi theo giờ đến ↗</Link></>}
+      </div>
     </section>
 
     <nav className="customer-shortcuts" aria-label="Thao tác gửi xe">

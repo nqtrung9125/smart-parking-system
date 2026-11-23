@@ -9,7 +9,7 @@ import { Empty, Loading, Notice, PageHeader } from '../components/Ui'
 import { dateTime, money, parkingDuration } from '../lib/format'
 import { useResource } from '../lib/useResource'
 
-const methods = { 1: 'Tiền mặt', 2: 'Thẻ mô phỏng', 3: 'Chuyển khoản', 4: 'Số dư gửi xe' }
+const methods = { 1: 'Tiền mặt', 2: 'Thẻ mô phỏng', 3: 'Chuyển khoản', 4: 'Số dư gửi xe', 5: 'Cọc giữ chỗ' }
 
 function BillDetail({ bill, token, onRefresh, balance, payBalance, paying }) {
   const [showQr, setShowQr] = useState(false)
@@ -26,7 +26,7 @@ function BillDetail({ bill, token, onRefresh, balance, payBalance, paying }) {
       <div><h2>Phí gửi xe</h2><p>Lượt gửi #{bill.sessionId} · {bill.plateNumber}</p></div>
       <span className={'pill ' + (bill.paidAtUtc ? 'pill-green' : 'pill-amber')}>{bill.paidAtUtc ? 'Đã thanh toán' : 'Chờ thanh toán'}</span>
     </div>
-    <div className="bill-amount"><span>{bill.paidAtUtc ? 'Đã thu' : 'Cần thanh toán'}</span><strong>{money(bill.amount)}</strong></div>
+    <div className="bill-amount"><span>{bill.paidAtUtc ? 'Đã thu' : 'Cần thanh toán'}</span><strong>{money(bill.paidAtUtc ? bill.amount : bill.amountDue)}</strong></div>
     <dl className="bill-facts">
       <div><dt>Bãi xe</dt><dd>{bill.lotName} · Ô {bill.spotCode}</dd></div>
       <div><dt>Vào bãi</dt><dd>{dateTime(bill.checkInUtc)}</dd></div>
@@ -39,13 +39,14 @@ function BillDetail({ bill, token, onRefresh, balance, payBalance, paying }) {
       </>}
     </dl>
     <ParkingFeeBreakdown charge={bill} />
+    {bill.depositApplied > 0 && <p>Tổng phí {money(bill.amount)} · Đã trừ cọc {money(bill.depositApplied)}</p>}
     {!bill.paidAtUtc && <>
       <p className="helper-text">Số dư gửi xe <strong>{money(balance)}</strong> · <Link to="/wallet">Nạp số dư</Link></p>
       <div className="payment-actions">
         <button type="button" className="button main-button" aria-expanded={showQr} onClick={() => setShowQr(!showQr)}>
           {showQr ? 'Ẩn mã QR' : 'Xem mã VietQR'}
         </button>
-        <button type="button" className="button light-button" disabled={paying || balance == null || balance < bill.amount} onClick={() => payBalance(bill)}>
+        <button type="button" className="button light-button" disabled={paying || balance == null || balance < bill.amountDue} onClick={() => payBalance(bill)}>
           {paying ? 'Đang thanh toán…' : 'Trả bằng số dư'}
         </button>
         <button type="button" className="button light-button" onClick={refresh}>Kiểm tra trạng thái</button>
@@ -82,12 +83,12 @@ export default function CustomerPaymentsPage() {
   const invalidSelection = Boolean(selectedId && !requestedBill && filter === 'all')
   const selectedBill = invalidSelection ? null
     : visibleBills.find((bill) => bill === requestedBill) || visibleBills.find((bill) => !bill.paidAtUtc) || visibleBills[0]
-  const unpaidTotal = rows.reduce((total, bill) => total + (bill.paidAtUtc ? 0 : bill.amount), 0)
+  const unpaidTotal = rows.reduce((total, bill) => total + (bill.paidAtUtc ? 0 : bill.amountDue), 0)
 
   function refresh() { bills.refresh(); wallet.refresh() }
 
   async function payBalance(bill) {
-    if (!window.confirm('Dùng ' + money(bill.amount) + ' từ số dư để thanh toán lượt #' + bill.sessionId + '?')) return
+    if (!window.confirm('Dùng ' + money(bill.paidAtUtc ? bill.amount : bill.amountDue) + ' từ số dư để thanh toán lượt #' + bill.sessionId + '?')) return
     setPaying(true)
     setError('')
     setMessage('')
@@ -124,7 +125,7 @@ export default function CustomerPaymentsPage() {
                 <button type="button" className="choice-row bill-choice" aria-pressed={bill.sessionId === selectedBill?.sessionId}
                   onClick={() => setParams({ session: String(bill.sessionId) }, { replace: true })}>
                   <span><strong>{bill.plateNumber}</strong><small>{bill.lotName} · Lượt #{bill.sessionId}</small></span>
-                  <span><strong>{money(bill.amount)}</strong><small>{bill.paidAtUtc ? 'Đã thanh toán' : 'Chờ thanh toán'}</small></span>
+                  <span><strong>{money(bill.paidAtUtc ? bill.amount : bill.amountDue)}</strong><small>{bill.paidAtUtc ? 'Đã thanh toán' : 'Chờ thanh toán'}</small></span>
                 </button>
               </li>)}</ul>}
           </section>

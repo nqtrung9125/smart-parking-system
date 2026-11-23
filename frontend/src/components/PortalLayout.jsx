@@ -2,7 +2,8 @@ import { Link, Outlet, useLocation } from 'react-router'
 import { useAuth } from '../auth/useAuth'
 import { portalFor, portalPaths } from '../lib/portal'
 import AccountLink from './AccountLink'
-import { Brand } from './SiteChrome'
+import NavDisclosure from './NavDisclosure'
+import { Brand, SiteFooter } from './SiteChrome'
 import Icon from './Icon'
 import './portal.css'
 
@@ -17,6 +18,7 @@ const areas = {
     primary: [
       { to: '/my-parking', label: 'Tổng quan', icon: 'grid' },
       { to: '/reservations', label: 'Đặt chỗ', icon: 'pin' },
+      { to: '/parking-search', label: 'Tìm bãi theo giờ', icon: 'search' },
       { to: '/parked', label: 'Tìm xe', icon: 'map' },
       { to: '/vehicles', label: 'Xe của tôi', icon: 'car' },
       { to: '/payments', label: 'Thanh toán', icon: 'wallet' },
@@ -29,8 +31,9 @@ const areas = {
     primary: [
       { to: '/staff/check-in', label: 'Nhận xe', icon: 'car' },
       { to: '/staff/check-out', label: 'Trả xe & thu phí', icon: 'arrow' },
-      { to: '/staff/reservations', label: 'Duyệt đặt chỗ', icon: 'clock' },
+      { to: '/staff/reservations', label: 'Lịch đặt theo bãi', icon: 'clock' },
       { to: '/staff/revenue', label: 'Doanh thu', icon: 'wallet' },
+      { to: '/staff/forecast', label: 'Dự báo bãi xe', icon: 'clock' },
     ],
   },
   admin: {
@@ -40,9 +43,10 @@ const areas = {
       { to: '/admin/manage', label: 'Bãi xe', icon: 'pin' },
       { to: '/admin/manage?tab=spots', label: 'Chỗ đỗ', icon: 'map' },
       { to: '/admin/manage?tab=staff', label: 'Nhân viên', icon: 'car' },
-      { to: '/admin/reservations', label: 'Duyệt đặt chỗ', icon: 'clock' },
+      { to: '/admin/reservations', label: 'Lịch đặt theo bãi', icon: 'clock' },
       { to: '/admin/wallet', label: 'Duyệt nạp số dư', icon: 'wallet' },
       { to: '/admin/revenue', label: 'Doanh thu', icon: 'wallet' },
+      { to: '/admin/forecast', label: 'Dự báo bãi xe', icon: 'clock' },
     ],
   },
 }
@@ -88,6 +92,10 @@ export default function PortalLayout({ area }) {
     </aside>
     <div className="portal-body">
       <header className="portal-topbar" id="site-top">
+        <NavDisclosure className="mobile-menu" label="Mở điều hướng" trigger="☰ Menu">
+          <Link to="/">Trang chủ</Link><PortalNav links={config.primary} label={config.title} location={location} />
+          {admin && <Link to={view === 'staff' ? portalPaths.admin : portalPaths.staff}>{view === 'staff' ? 'Về quản trị' : 'Mở ca trực'}</Link>}
+        </NavDisclosure>
         <div className="portal-top-links">
           {view !== 'customer' && <span className="portal-context">{config.title}</span>}
           <Link to="/#lots" aria-current={browsing ? 'location' : undefined}>{ownArea === 'staff' ? 'Bãi phụ trách' : 'Danh sách bãi xe'}</Link>
@@ -96,10 +104,7 @@ export default function PortalLayout({ area }) {
         <AccountLink user={user} />
       </header>
       <Outlet />
-      <footer className="portal-footer">
-        <span>Smart Parking</span>
-        <a href="#site-top">Về đầu trang ↑</a>
-      </footer>
+      <SiteFooter area={view} />
     </div>
   </div>
 }

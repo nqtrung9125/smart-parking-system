@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { useAuth } from '../auth/useAuth'
 import { api } from '../lib/api'
@@ -9,15 +9,9 @@ import BookingPreview from '../components/BookingPreview'
 import ReservationBadge from '../components/ReservationBadge'
 import Icon from '../components/Icon'
 import ParkingPriceTable from '../components/ParkingPriceTable'
+import { bookingInputTime as localTime, hourMs, maxDuration } from '../lib/bookingTime'
 
-const hourMs = 60 * 60 * 1000
-const maxDuration = 30 * 24 * hourMs
 const quickDurations = [[2, '2 giờ'], [24, '1 ngày'], [72, '3 ngày'], [168, '7 ngày']]
-
-function localTime(date) {
-  const pad = (value) => String(value).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
 
 function ReservationHistory({ reservations, cancel, busy }) {
   return <section className="panel section-gap reservation-history" id="my-reservations" aria-labelledby="reservation-history-title">
@@ -38,11 +32,14 @@ function ReservationHistory({ reservations, cancel, busy }) {
             <span>Đến <strong>{dateTime(item.startUtc)}</strong></span>
             <span>Lấy xe <strong>{dateTime(item.endUtc)}</strong></span>
             {item.estimatedFee != null && <span>Phí dự kiến <strong>{money(item.estimatedFee)}</strong></span>}
+            {item.depositAmount > 0 && <span>{item.capturedDeposit == null ? 'Cọc đang giữ' : item.capturedDeposit === 0 ? 'Cọc đã hoàn' :
+              item.status === 3 ? 'Cọc đã trừ vào phí' : 'Cọc đã thu'} <strong>{money(item.capturedDeposit || item.depositAmount)}</strong></span>}
+            {item.status === 1 && item.arrivalDeadlineUtc && <span>Nhận xe trước <strong>{dateTime(item.arrivalDeadlineUtc)}</strong></span>}
             {item.rejectionReason && <span className="reservation-reason">Lý do từ chối: {item.rejectionReason}</span>}
           </div>
           <div className="reservation-row-actions">
             <ReservationBadge status={item.status} />
-            {item.canCancel && <button type="button" className="text-danger" disabled={busy} onClick={() => cancel(item.id)}>Hủy đơn #{item.id}</button>}
+            {item.canCancel && <button type="button" className="text-danger" disabled={busy} onClick={() => cancel(item)}>Hủy đơn #{item.id}</button>}
           </div>
         </li>)}
       </ul> : <Empty>Bạn chưa có lượt đặt chỗ.</Empty>}
@@ -55,13 +52,17 @@ export default function ReservationsPage() {
   const vehicles = useResource('/api/vehicles/mine', token)
   const lots = useResource('/api/parking-lots')
   const reservations = useResource('/api/reservations/mine', token, { refreshInterval: 15000 })
+  const wallet = useResource('/api/wallet/mine', token, { refreshInterval: 15000 })
+  const submission = useRef(null)
   const pricing = useResource('/api/pricing')
-  const [vehicleId, setVehicleId] = useState('')
+  const [requestedVehicle, setVehicleId] = useState(null)
+  const matchingVehicles = (vehicles.data || []).filter((vehicle) => vehicle.type === Number(params.get('type')))
+  const vehicleId = requestedVehicle ?? (matchingVehicles.length === 1 ? String(matchingVehicles[0].id) : '')
   const [lotId, setLotId] = useState(() => params.get('lot') || '')
   const [spotId, setSpotId] = useState(() => params.get('spot') || '')
   const [openedAt] = useState(Date.now)
-  const [start, setStart] = useState(() => localTime(new Date(openedAt + 10 * 60000)))
-  const [end, setEnd] = useState(() => localTime(new Date(openedAt + 70 * 60000)))
+  const [start, setStart] = useState(() => localTime(params.get('startUtc') || NaN) || localTime(openedAt + 10 * 60000))
+  const [end, setEnd] = useState(() => localTime(params.get('endUtc') || NaN) || localTime(openedAt + 70 * 60000))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -97,27 +98,39 @@ export default function ReservationsPage() {
     if (chosenSpot?.status !== 'Available' || !selectedVehicle || !estimate.data || pricing.error) return
     setBusy(true)
     try {
-      const result = await api('/api/reservations', { method: 'POST', token, body: {
+      const body = {
         vehicleId: selectedVehicle.id, parkingSpotId: chosenSpot.id,
         startUtc: new Date(startMs).toISOString(), endUtc: new Date(endMs).toISOString(), expectedFee: estimate.data.total,
-      } })
-      setMessage(`Đã gửi yêu cầu #${result.id}. Xem kết quả duyệt trong mục Đặt chỗ của tôi.`)
+        expectedDeposit: estimate.data.depositAmount,
+      }
+      const fingerprint = JSON.stringify(body)
+      if (submission.current?.fingerprint !== fingerprint) {
+        submission.current = { fingerprint, id: crypto.randomUUID() }
+      }
+      const result = await api('/api/reservations', { method: 'POST', token,
+        body: { ...body, requestId: submission.current.id } })
+      submission.current = null
+      setMessage(result.status !== 1 ? `Giao dịch thuộc lịch #${result.id}. Xem trạng thái hiện tại trong Đặt chỗ của tôi.` : `Đã xác nhận đặt chỗ #${result.id}. Tiền cọc ${money(result.depositAmount)}. Vui lòng nhận xe trước ${dateTime(result.arrivalDeadlineUtc)}.`)
+      wallet.refresh()
       reservations.refresh()
       spotMap.refresh()
     } catch (cause) {
       setError(cause.message)
-      if (cause.status === 409) { spotMap.refresh(); pricing.refresh(); estimate.refresh() }
+      if (cause.status === 409) { spotMap.refresh(); pricing.refresh(); estimate.refresh(); wallet.refresh(); reservations.refresh() }
     } finally { setBusy(false) }
   }
 
-  async function cancel(id) {
-    if (!window.confirm('Hủy đơn đặt chỗ này?')) return
+  async function cancel(item) {
+    const id = item.id
+    const policy = item.depositAmount > 0 ? ` Hủy trước giờ hẹn được hoàn ${money(item.depositAmount)}. Từ giờ hẹn, bãi thu khoản cọc này.` : ''
+    if (!window.confirm(`Hủy lịch #${id}?${policy}`)) return
     setBusy(true)
     setError('')
     setMessage('')
     try {
       await api(`/api/reservations/${id}/cancel`, { method: 'POST', token })
-      setMessage(`Đã hủy đơn #${id}.`)
+      setMessage(`Đã hủy đơn #${id}. Xem kết quả xử lý cọc trong lịch đặt.`)
+      wallet.refresh()
       reservations.refresh()
       spotMap.refresh()
     } catch (cause) {
@@ -130,14 +143,14 @@ export default function ReservationsPage() {
     <section className="portal-hero reservation-hero">
       <div className="portal-hero-copy">
         <h1>Đặt chỗ đỗ xe</h1>
-        <p>Chọn xe, bãi và khung giờ gửi. Quản lý bãi sẽ xác nhận yêu cầu trước giờ bạn đến.</p>
+        <p>Chọn xe, bãi và khung giờ gửi. Lịch được xác nhận ngay khi ví đủ tiền cọc và ô đỗ còn trống.</p>
       </div>
       <a href="#my-reservations" className="button portal-hero-action"><Icon name="clock" size={17} /> Đặt chỗ của tôi</a>
     </section>
-    <Notice error={error || vehicles.error || lots.error || pricing.error || estimate.error} success={message} />
-    <div className="two-column booking-grid">
-      <form className="panel booking-form" onSubmit={create}>
-        <h2>Gửi yêu cầu đặt chỗ</h2>
+    <Notice error={error || vehicles.error || lots.error || pricing.error || estimate.error || wallet.error} success={message} />
+    <form className="booking-workbench" onSubmit={create}>
+      <section className="panel booking-form booking-controls">
+        <h2>Chọn ô và đặt cọc</h2>
         {!vehicles.loading && !vehicles.error && !vehicles.data?.length && <p className="helper-text">Bạn cần <Link to="/vehicles">đăng ký xe</Link> trước khi đặt chỗ.</p>}
         <div className="form-grid">
           <Field label="Xe của bạn"><select value={vehicleId} onChange={(event) => {
@@ -173,17 +186,31 @@ export default function ReservationsPage() {
             {availableSpots.map((spot) => <option key={spot.id} value={spot.id}>{spot.code} · {vehicleType(spot.type)}</option>)}
           </select>
         </Field>
+      </section>
+      <BookingPreview map={spotMap} lot={selectedLot} spotId={spotId} onChoose={setSpotId} vehicleTypeId={selectedVehicle?.type} initialMode={params.get('view')?.toUpperCase()} />
+      <section className="panel booking-form booking-payment">
+        <h2>Chi phí đặt chỗ</h2>
+        {chosenSpot && <p className="booked-position"><Icon name="pin" size={16} /> {selectedLot?.name} · Ô {chosenSpot.code}</p>}
         <div className="booking-estimate" aria-live="polite">
-          <div><span>Dự kiến nếu ra đúng giờ</span><strong>{estimate.loading ? 'Đang tính…' : money(estimate.data?.total)}</strong></div>
+          <div><span>Dự kiến nếu ra đúng giờ</span><strong>{estimate.loading ? 'Đang tính…' : estimate.data ? money(estimate.data.total) : '—'}</strong></div>
           {pricing.data && <a href="#parking-prices">Xem bảng giá</a>}
         </div>
         {estimate.data && <p className="helper-text">{estimate.data.billableHours} giờ tính phí{estimate.data.surcharge > 0 ? ' · Đã gồm phụ phí ' + money(estimate.data.surcharge) : ''}. Hệ thống chốt phí khi xác nhận xe ra.</p>}
-        <button className="button main-button" disabled={busy || !selectedVehicle || chosenSpot?.status !== 'Available' || !estimate.data || !pricing.data}>
-          {busy ? 'Đang xử lý…' : 'Gửi yêu cầu'}
+        {estimate.data && <section className="deposit-summary" aria-label="Tiền cọc đặt chỗ">
+          <dl>
+            <div><dt>Cọc giữ chỗ · 1 giờ gửi</dt><dd>{money(estimate.data.depositAmount)}</dd></div>
+            <div><dt>Số dư khả dụng</dt><dd>{money(wallet.data?.balance)}</dd></div>
+            <div><dt>Dự kiến trả thêm khi ra đúng giờ</dt><dd>{money(estimate.data.total - estimate.data.depositAmount)}</dd></div>
+          </dl>
+          <p>Hủy trước giờ đến được hoàn toàn bộ cọc. Hủy từ giờ đến hoặc vắng mặt sẽ mất cọc. Bãi giữ ô tối đa {estimate.data.arrivalGraceMinutes} phút sau giờ hẹn, trong giới hạn giờ lấy xe.</p>
+          {wallet.data && wallet.data.balance < estimate.data.depositAmount &&
+            <Link to="/wallet">Nạp thêm {money(estimate.data.depositAmount - wallet.data.balance)} để đặt chỗ →</Link>}
+        </section>}
+        <button className="button main-button" disabled={busy || !wallet.data || wallet.data.balance < estimate.data?.depositAmount || !selectedVehicle || chosenSpot?.status !== 'Available' || !estimate.data || !pricing.data}>
+          {busy ? 'Đang xử lý…' : 'Đặt cọc và xác nhận'}
         </button>
-      </form>
-      <BookingPreview map={spotMap} lot={selectedLot} spotId={spotId} initialMode={params.get('view')?.toUpperCase()} />
-    </div>
+      </section>
+    </form>
     {pricing.data && <ParkingPriceTable rates={pricing.data} />}
     <ReservationHistory reservations={reservations} cancel={cancel} busy={busy} />
   </main>

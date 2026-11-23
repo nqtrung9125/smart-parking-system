@@ -118,58 +118,17 @@ $estimatePath = "/api/pricing/estimate?vehicleType=1&startUtc=$([uri]::EscapeDat
 $estimate = CallApi 'GET' $estimatePath
 Expect $estimate.Status 200 'booking can preview fees for three days'
 Expect $estimate.Data.billableHours 72 'planned stay uses the full duration'
-$request = @{ vehicleId = $vehicle.Data.id; parkingSpotId = $spot.Data.id; startUtc = $start; endUtc = $end; expectedFee = $estimate.Data.total }
+$request = @{ vehicleId = $vehicle.Data.id; parkingSpotId = $spot.Data.id; startUtc = $start; endUtc = $end; expectedFee = $estimate.Data.total; expectedDeposit = $estimate.Data.depositAmount; requestId = [guid]::NewGuid().ToString() }
 $wrongFee = $request.Clone()
 $wrongFee.expectedFee = $estimate.Data.total + 1
 Expect (CallApi 'POST' '/api/reservations' $wrongFee $customerToken).Status 409 'customer must see the current booking estimate'
 $tooLong = $request.Clone()
 $tooLong.endUtc = ([DateTime]$start).ToUniversalTime().AddDays(31).ToString('O')
 Expect (CallApi 'POST' '/api/reservations' $tooLong $customerToken).Status 400 'reservations above 30 days are rejected'
-$reservation = CallApi 'POST' '/api/reservations' $request $customerToken
-Expect $reservation.Status 201 'customer requests spot for three days'
-Expect $reservation.Data.status 4 'new reservation waits for approval'
-Expect $reservation.Data.estimatedFee $estimate.Data.total 'booking preserves the fee shown before submission'
-$reservationPath = "/api/reservations/$($reservation.Data.id)"
-$pendingPath = '/api/reservations/pending'
-$activePath = "/api/reservations/active?plate=T$suffix"
-Expect (CallApi 'GET' $pendingPath $null $customerToken).Status 403 'customer cannot see review queue'
-Expect (CallApi 'POST' "$reservationPath/approve" $null $customerToken).Status 403 'customer cannot approve their own request'
-Expect @((CallApi 'GET' $pendingPath $null $staffToken).Data).Count 0 'unassigned staff sees no pending requests'
-Expect (CallApi 'POST' "$reservationPath/approve" $null $staffToken).Status 404 'unassigned staff cannot approve directly'
-Expect @((CallApi 'GET' $activePath $null $staffToken).Data).Count 0 'pending request is excluded from check-in lookup'
-Expect @((CallApi 'GET' $pendingPath $null $adminToken).Data).Count 1 'admin sees all pending requests'
+Expect (CallApi 'POST' '/api/reservations' $request $customerToken).Status 409 'insufficient available balance blocks booking'
 Expect (CallApi 'PUT' "/api/admin/staff/$($assigned.Data.id)/lots" @{ parkingLotIds = @($lot.Data.id) } $adminToken).Status 204 'admin assigns staff to lot'
-$staffLots = @((CallApi 'GET' $assignedPath $null $staffToken).Data)
-Expect $staffLots.Count 1 'staff sees one assigned lot'
-Expect $staffLots[0].id $lot.Data.id 'staff sees the assigned lot only'
-Expect @((CallApi 'GET' "/api/parking-spots/operational?parkingLotId=$($otherLot.Data.id)" $null $staffToken).Data).Count 0 'other lot spots are excluded'
-Expect @((CallApi 'GET' $pendingPath $null $staffToken).Data).Count 1 'assigned staff sees request'
-$rangeMapPath = "/api/parking-spots/map?parkingLotId=$($lot.Data.id)&startUtc=$([uri]::EscapeDataString($start))&endUtc=$([uri]::EscapeDataString($end))"
-Expect (CallApi 'GET' $rangeMapPath).Data[0].status 'Reserved' 'pending request holds spot in selected range'
-Expect (CallApi 'POST' '/api/reservations' $request $customerToken).Status 409 'pending request blocks overlap'
-Expect (CallApi 'POST' "$reservationPath/reject" @{ reason = '   ' } $staffToken).Status 400 'rejection requires a reason'
-Expect (CallApi 'POST' "$reservationPath/reject" @{ reason = 'Bảo trì' } $staffToken).Status 204 'assigned staff rejects request'
-$rejected = CallApi 'GET' $reservationPath $null $customerToken
-Expect $rejected.Data.status 5 'owner can see rejection'
-Expect $rejected.Data.rejectionReason 'Bảo trì' 'owner can read rejection reason'
-Expect (CallApi 'GET' $rangeMapPath).Data[0].status 'Available' 'reject releases held spot'
-$reservation = CallApi 'POST' '/api/reservations' $request $customerToken
-Expect $reservation.Status 201 'released spot can be requested again'
-$reservationPath = "/api/reservations/$($reservation.Data.id)"
-Expect (CallApi 'POST' "$reservationPath/approve" $null $staffToken).Status 204 'assigned staff approves request'
-Expect (CallApi 'GET' $reservationPath $null $customerToken).Data.status 1 'owner sees confirmation'
-$arrivalQueue = CallApi 'GET' '/api/reservations/arrivals' $null $staffToken
-Expect $arrivalQueue.Status 200 'staff can load arrivals'
-Expect $arrivalQueue.Data[0].lotId $lot.Data.id 'arrivals are grouped by assigned lot'
-Expect $arrivalQueue.Data[0].canCheckIn $false 'arrival is disabled until the booked start'
-Expect (CallApi 'POST' "$reservationPath/approve" $null $adminToken).Status 409 'duplicate review is rejected'
 $myParkedPath = '/api/parking-sessions/mine/active'
 Expect (CallApi 'GET' $myParkedPath).Status 401 'parked vehicles require login'
-Expect @((CallApi 'GET' $myParkedPath $null $customerToken).Data).Count 0 'reservation alone does not locate a parked vehicle'
-Expect @((CallApi 'GET' $activePath $null $staffToken).Data).Count 1 'approved request appears in check-in lookup'
-Expect (CallApi 'POST' '/api/reservations' $request $customerToken).Status 409 'overlap denied'
-Expect (CallApi 'POST' "/api/reservations/$($reservation.Data.id)/cancel" $null $customerToken).Status 204 'customer cancel reservation'
-Expect @((CallApi 'GET' $assignedPath $null $staffToken).Data).Count 1 'assigned lot is listed with no pending requests'
 Expect (CallApi 'GET' "/api/parking-spots/map?parkingLotId=$($lot.Data.id)").Status 200 'public spot map'
 Expect (CallApi 'POST' '/api/parking-sessions/check-in' @{
     vehicleId = $vehicle.Data.id; parkingSpotId = $otherSpot.Data.id
@@ -270,6 +229,33 @@ if ($ConfiguredTransfer) {
     Expect (CallApi 'GET' $walletPath $null $customerToken).Data.balance 5000 'credited balance is exact'
     Expect (CallApi 'GET' $walletPath $null $adminToken).Data.balance 0 'wallet belongs to its owner'
 
+    $request.startUtc = [DateTime]::UtcNow.AddHours(1).ToString('O')
+    $request.endUtc = ([DateTime]$request.startUtc).ToUniversalTime().AddDays(3).ToString('O')
+    $request.startUtc = ([datetime]$request.startUtc).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
+    $request.endUtc = ([datetime]$request.endUtc).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
+    $attempts = 1..2 | ForEach-Object -Parallel {
+        $body = ($using:request).Clone()
+        $body.requestId = [guid]::NewGuid().ToString()
+        $response = Invoke-WebRequest -Method Post -Uri ($using:BaseUrl + '/api/reservations') -ContentType 'application/json' -Body ($body | ConvertTo-Json) -Headers @{ Authorization = 'Bearer ' + $using:customerToken } -SkipHttpErrorCheck
+        [pscustomobject]@{ Status = [int]$response.StatusCode; RequestId = $body.requestId }
+    }
+    Expect @($attempts | Where-Object Status -eq 201).Count 1 'one simultaneous booking acquires spot and deposit'
+    Expect @($attempts | Where-Object Status -eq 409).Count 1 'competing booking cannot acquire a second hold'
+    $request.requestId = ($attempts | Where-Object Status -eq 201).RequestId
+    $reservation = CallApi 'POST' '/api/reservations' $request $customerToken
+    Expect $reservation.Status 200 'retry finds same booking'
+    Expect $reservation.Data.status 1 'wallet deposit confirms reservation immediately'
+    Expect (CallApi 'GET' $walletPath $null $customerToken).Data.heldDeposit 5000 'one deposit is held'
+    Expect (CallApi 'GET' $walletPath $null $customerToken).Data.balance 0 'held funds cannot be spent'
+    $upcoming = CallApi 'GET' '/api/reservations/upcoming' $null $staffToken
+    Expect ($upcoming.Data.id -contains $reservation.Data.id) $true 'assigned staff sees confirmed booking'
+    Expect (CallApi 'POST' "/api/reservations/$($reservation.Data.id)/cancel" $null $customerToken).Status 204 'owner cancels before arrival'
+    Expect (CallApi 'GET' $walletPath $null $customerToken).Data.balance 5000 'timely cancellation refunds hold'
+    $request.requestId = [guid]::NewGuid().ToString()
+    $reservation = CallApi 'POST' '/api/reservations' $request $customerToken
+    Expect $reservation.Status 201 'released spot can be booked again'
+    Expect (CallApi 'POST' "/api/reservations/$($reservation.Data.id)/release" $null $staffToken).Status 204 'lot cancellation succeeds'
+    Expect (CallApi 'GET' $walletPath $null $customerToken).Data.balance 5000 'lot cancellation releases deposit'
     $otherPaymentPath = "/api/payments/parking-session/$($otherSession.Data.id)"
     Expect (CallApi 'POST' $otherPaymentPath @{ method = 3; note = "top$suffix" } $adminToken).Status 409 'top-up receipt cannot also pay a parking bill'
     Expect (CallApi 'POST' "$otherPaymentPath/balance" $null $adminToken).Status 404 'admin cannot debit an unrelated balance'

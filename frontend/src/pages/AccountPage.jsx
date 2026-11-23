@@ -6,6 +6,7 @@ import { useResource } from '../lib/useResource'
 import { initials, roleNames } from '../lib/format'
 import { portalFor, portalPaths } from '../lib/portal'
 import { Field, Notice, PageHeader } from '../components/Ui'
+import ProfileFields from '../components/ProfileFields'
 
 export default function AccountPage() {
   const { user, token, logout, setProfile } = useAuth()
@@ -14,8 +15,9 @@ export default function AccountPage() {
   const customer = area === 'customer'
   const vehicles = useResource(customer ? '/api/vehicles/mine' : null, token)
   const reservations = useResource(customer ? '/api/reservations/mine' : null, token)
-  const [displayName, setName] = useState(user.displayName || '')
-  const [contactPhone, setPhone] = useState(user.contactPhone || '')
+  const [profile, setDraft] = useState(() => editableProfile(user))
+  const [editCitizenId, setEditCitizenId] = useState(false)
+  const [citizenId, setCitizenId] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -26,11 +28,12 @@ export default function AccountPage() {
     event.preventDefault()
     setBusy(true); setError(''); setSuccess('')
     try {
-      const result = await api('/api/me', { method: 'PUT', token, body: {
-        displayName: displayName.trim() || null, contactPhone: contactPhone.trim() || null,
-      } })
+      const result = await api('/api/me', { method: 'PUT', token,
+        body: editCitizenId ? { ...profile, citizenId } : profile })
       setProfile(result)
-      setName(result.displayName || ''); setPhone(result.contactPhone || '')
+      setDraft(editableProfile(result))
+      setEditCitizenId(false)
+      setCitizenId('')
       setSuccess('Đã lưu thông tin tài khoản.')
     } catch (cause) { setError(cause.message) }
     finally { setBusy(false) }
@@ -47,9 +50,16 @@ export default function AccountPage() {
       <form className="panel" onSubmit={save}>
         <h2>Hồ sơ cá nhân</h2>
         <Notice error={error} success={success} />
-        <Field label="Tên hiển thị"><input autoComplete="name" value={displayName} maxLength={80} onChange={(event) => setName(event.target.value)} placeholder="Nhập tên của bạn" /></Field>
         <Field label="Email đăng nhập"><input type="email" value={user.email || ''} readOnly /></Field>
-        <Field label="Số điện thoại liên hệ" hint="Không bắt buộc. Số này dùng để liên hệ."><input type="tel" autoComplete="tel" maxLength={20} value={contactPhone} onChange={(event) => setPhone(event.target.value)} placeholder="Nhập số điện thoại" /></Field>
+        <ProfileFields profile={profile} onChange={setDraft} />
+        {user.contactPhone && <p>{user.phoneLoginEnabled ? 'Có thể đăng nhập bằng số điện thoại đã lưu.' : 'Số hiện tại chưa dùng được để đăng nhập. Hãy lưu một số hợp lệ, riêng cho tài khoản này.'}</p>}
+        {editCitizenId ? <Field label="Số căn cước công dân (CCCD)" hint="Nhập 12 chữ số. Để trống và lưu để xóa CCCD.">
+          <input type="text" inputMode="numeric" autoComplete="off" pattern="[0-9]{12}" maxLength={12}
+            value={citizenId} onChange={(event) => setCitizenId(event.target.value)} />
+        </Field> : <div><strong>CCCD</strong><p>{user.citizenIdLast4 ? '•••• •••• ' + user.citizenIdLast4 : 'Chưa cập nhật'}</p></div>}
+        <button type="button" className="text-button" onClick={() => { setCitizenId(''); setEditCitizenId(!editCitizenId) }}>
+          {editCitizenId ? 'Hủy chỉnh sửa CCCD' : user.citizenIdLast4 ? 'Thay đổi CCCD' : 'Thêm CCCD'}
+        </button>
         <button className="button main-button" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu thông tin'}</button>
       </form>
       <div>
@@ -61,4 +71,8 @@ export default function AccountPage() {
       </div>
     </div>
   </main>
+}
+
+function editableProfile(user) {
+  return { displayName: user.displayName || '', contactPhone: user.contactPhone || '', address: user.address || '' }
 }

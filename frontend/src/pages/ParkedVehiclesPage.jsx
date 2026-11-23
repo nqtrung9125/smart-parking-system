@@ -6,6 +6,7 @@ import { api } from '../lib/api'
 import { dateTime, money, vehicleType } from '../lib/format'
 import BookingPreview from '../components/BookingPreview'
 import ParkingFeeBreakdown from '../components/ParkingFeeBreakdown'
+import ParkingExtensionForm from '../components/ParkingExtensionForm'
 import { Empty, Loading, Notice, PageHeader } from '../components/Ui'
 
 function CustomerCheckout({ session, token }) {
@@ -40,6 +41,7 @@ function CustomerCheckout({ session, token }) {
       {charge && <>
         <div className="bill-amount"><span>Phí dự tính khi trả xe lúc này</span><strong>{money(charge.total)}</strong></div>
         <ParkingFeeBreakdown charge={charge} />
+        {quote.data.depositApplied > 0 && <p>Trừ tiền cọc {money(quote.data.depositApplied)} · Còn phải trả <strong>{money(quote.data.amountDue)}</strong></p>}
         <p className="helper-text">Chỉ xác nhận sau khi bạn đã đưa xe ra khỏi ô đỗ.</p>
       </>}
       <div className="payment-actions">
@@ -56,7 +58,8 @@ function CustomerCheckout({ session, token }) {
 export default function ParkedVehiclesPage() {
   const { token } = useAuth()
   const [params, setParams] = useSearchParams()
-  const sessions = useResource('/api/parking-sessions/mine/active', token)
+  const sessions = useResource('/api/parking-sessions/mine/active', token, { refreshInterval: 15000 })
+  const [message, setMessage] = useState('')
   const active = sessions.data || []
   const selection = params.get('session')
   const selected = selection ? active.find((item) => String(item.id) === selection) : active[0]
@@ -64,6 +67,7 @@ export default function ParkedVehiclesPage() {
 
   return <main className="page-wrap">
     <PageHeader eyebrow="LẤY XE" title="Xe đang gửi" description="Xem vị trí xe của bạn trước khi đến lấy xe." actions={<button type="button" className="button light-button" disabled={sessions.loading} onClick={() => { sessions.refresh(); map.refresh() }}>↻ Cập nhật</button>} />
+    <Notice success={message} />
     {sessions.loading ? <Loading /> : sessions.error ? <Notice error={sessions.error} /> : !active.length ? <>
       <Empty>Bạn không có xe đang gửi. Vị trí xe sẽ xuất hiện sau khi nhân viên ghi nhận xe vào bãi.</Empty>
       <div className="section-gap"><Link className="button light-button" to="/reservations">Xem lịch đặt chỗ</Link></div>
@@ -73,7 +77,7 @@ export default function ParkedVehiclesPage() {
         {selection && !selected && <Notice error="Lượt gửi này không còn trong danh sách xe đang gửi." />}
         <div className="parked-options" role="group" aria-label="Xe của bạn đang trong bãi">{active.map((item) =>
           <button key={item.id} type="button" className="choice-row parked-choice" aria-pressed={selected?.id === item.id}
-            onClick={() => setParams({ session: String(item.id) }, { replace: true })}>
+            onClick={() => { setMessage(''); setParams({ session: String(item.id) }, { replace: true }) }}>
             <strong>{item.plateNumber}</strong><span>{item.lotName} · Ô {item.spotCode}</span>
           </button>
         )}</div>
@@ -85,10 +89,13 @@ export default function ParkedVehiclesPage() {
             <div><dt>Giờ vào bãi</dt><dd>{dateTime(selected.checkInUtc)}</dd></div>
             {selected.scheduledEndUtc && <div><dt>Giờ lấy xe đã đặt</dt><dd>{dateTime(selected.scheduledEndUtc)}</dd></div>}
           </dl>
-          <CustomerCheckout key={selected.id} session={selected} token={token} />
+          <ParkingExtensionForm key={'extension:' + selected.id + ':' + selected.scheduledEndUtc} session={selected} token={token}
+            onChange={(message) => { setMessage(message); sessions.refresh() }} />
+          <CustomerCheckout key={selected.id + ':' + selected.scheduledEndUtc} session={selected} token={token} />
         </>}
       </section>
-      {selected && <BookingPreview map={map} lot={{ name: selected.lotName }} spotId={selected.parkingSpotId} parked />}
+      {selected && <BookingPreview key={selected.id + ':' + params.get('view')} map={map} lot={{ name: selected.lotName }}
+        spotId={selected.parkingSpotId} initialMode={params.get('view')} parked />}
     </div>}
   </main>
 }

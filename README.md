@@ -107,7 +107,7 @@ Các tài khoản dưới đây có hiệu lực sau khi tạo theo hướng d�
 | Vai trò | Email mẫu | Mật khẩu mẫu | Có thể thử |
 | --- | --- | --- | --- |
 | Admin | `admin@example.test` | `ParkingAdmin!4729` | Quản lý bãi, phân công nhân viên, xem doanh thu mọi bãi |
-| Nhân viên | `staff@example.test` | `ParkingStaff!5731` | Duyệt đặt chỗ, nhận xe, trả xe và xem doanh thu bãi phụ trách |
+| Nhân viên | `staff@example.test` | `ParkingStaff!5731` | Theo dõi lịch đặt, nhận xe, trả xe và xem doanh thu bãi phụ trách |
 | Khách hàng | `customer@example.test` | `ParkingCustomer!6843` | Đăng ký xe, đặt chỗ, xác nhận xe ra và thanh toán |
 
 1. **Admin.** Khi chạy bước cấu hình API trên database mới, giữ email `admin@example.test` và nhập mật khẩu mẫu của Admin, sau đó khởi động API với profile **https**.
@@ -115,6 +115,22 @@ Các tài khoản dưới đây có hiệu lực sau khi tạo theo hướng d�
 3. **Phân công bãi.** Đăng nhập Admin, mở **Nhân viên**, cấp quyền cho `staff@example.test`, rồi bấm **Phân công bãi**. Chọn **Bãi xe Bạch Đằng** nếu đã nạp dữ liệu Đà Nẵng, hoặc chọn bãi bạn đã tạo. Đăng nhập lại bằng tài khoản Nhân viên để thấy bãi trong trang **Doanh thu**. [Đăng nhập trên máy local](http://localhost:5173/login)
 
 ## Dữ liệu Đà Nẵng và bộ học máy
+
+Mở **Tìm bãi theo giờ đến** từ trang chủ, chọn một điểm đến trong danh mục Đà Nẵng, loại xe và khung gửi. Kết quả hiển thị khoảng cách đường thẳng ước tính, số chỗ dự kiến còn vào giờ đến, số ô có thể đặt trong cả khung và phí nếu lấy xe đúng giờ. Bấm **Xem ô có thể đặt** để chuyển sang trang đặt chỗ với bãi và giờ đã chọn. Backend kiểm tra lại tình trạng ô, xe và phí khi gửi yêu cầu.
+
+## Trợ lý AI
+
+Tạo khóa Gemini tại [Google AI Studio](https://aistudio.google.com/api-keys). Chạy từ thư mục gốc bằng PowerShell 7 để lưu khóa vào .NET User Secrets, rồi khởi động lại API.
+
+```powershell
+@{ 'Assistant:ApiKey' = (Read-Host -Prompt 'Gemini API key' -MaskInput) } |
+  ConvertTo-Json -Compress |
+  dotnet user-secrets set --project ./backend/Parking.Api
+```
+
+Khi triển khai, cấu hình `Assistant__ApiKey` ở backend. Model mặc định là `gemini-3.5-flash-lite` và có thể đổi qua `Assistant__Model`. Sau khi đăng nhập, bấm **Trợ lý AI** và thử câu “Tìm chỗ xe máy gần Cầu Rồng ngày mai từ 19:00 đến 22:00”. Luồng đặt cọc cần xe đã đăng ký, bãi đã nạp dữ liệu và số dư đủ. Khách xem thẻ báo giá rồi xác nhận trong chat. Tin nhắn dùng để hiểu yêu cầu được gửi đến Gemini, còn dữ liệu tra từ tài khoản do backend trả thẳng cho giao diện. Tránh nhập mật khẩu, OTP và thông tin định danh vào khung chat.
+
+KNN theo giờ và thứ dùng dữ liệu mô phỏng khi lịch sử vận hành còn ít. API ghi nhận theo giờ số xe đang đỗ và số ô có lịch đã duyệt tại các mốc dự báo 1, 2, 6 và 24 giờ. Sau khi có đủ mẫu đã qua thời điểm dự báo, KNN có thể học thêm từ hai thông tin này. API dùng biến thể có ngữ cảnh nếu sai số trên cùng mẫu kiểm tra bằng hoặc thấp hơn KNN theo giờ và thứ. Nhân viên xem dự báo 12 giờ và lịch đã duyệt của bãi được giao. Quản trị viên có thêm biểu đồ đối chiếu và số lần dự báo còn chỗ khi bãi đầy trên tập kiểm tra.
 
 Sau bước migration, chạy từ thư mục gốc:
 
@@ -126,7 +142,7 @@ Lệnh này tạo 8 bãi ở Đà Nẵng với 254 vị trí và trạng thái m
 
 Bộ [dữ liệu học máy CSV](backend/Parking.Api/Data/Training/da-nang-occupancy.csv) gồm **17.472 dòng theo giờ**, 91 ngày, 8 bãi, có sức chứa và số chỗ có xe theo từng loại. Dữ liệu được sinh từ mẫu giờ cao điểm, ngày thường/cuối tuần và biến động ngẫu nhiên có thể tái tạo bằng `node scripts/generate-training-data.mjs`. CSV không chứa biển số hoặc thông tin tài khoản. API giữ lại 7 ngày cuối để đo sai số trên dữ liệu mô phỏng.
 
-Kịch bản trình bày: tìm **Bạch Đằng** → mở chi tiết → chọn **3D** → chọn một ô trống → **Đặt chỗ**. Trang đặt chỗ mở sẵn đúng ô và góc xem, có thể đổi giữa 2D và 3D trước khi xác nhận. Mở **Tài khoản** từ góc phải để xem vai trò, email và OTP, hoặc cập nhật tên hiển thị và số điện thoại.
+Kịch bản trình bày: tìm **Bạch Đằng** → mở chi tiết → chọn **3D** → chọn một ô trống → **Đặt chỗ**. Trang đặt chỗ mở sẵn đúng ô và góc xem, có thể đổi giữa 2D và 3D trước khi xác nhận. Mở **Tài khoản** từ góc phải để xem vai trò, email và OTP, hoặc cập nhật tên người dùng, số điện thoại, địa chỉ và CCCD. Hồ sơ chỉ hiển thị bốn số cuối của CCCD đã lưu.
 
 ## Giao diện
 
@@ -134,18 +150,20 @@ Kịch bản trình bày: tìm **Bạch Đằng** → mở chi tiết → chọn
 | --- | --- |
 | Mọi người | Trang chủ, tìm bãi, sơ đồ 2D/3D, dự báo chỗ trống, đăng ký và đăng nhập |
 | Khách hàng | Hồ sơ, xe của tôi, đặt chỗ, tìm xe đang gửi trên sơ đồ 2D/3D, lịch sử và bảo mật |
-| Nhân viên | Duyệt đặt chỗ tại bãi phụ trách, nhận xe, trả xe, ghi nhận thanh toán và xem doanh thu từng bãi được phân công |
-| Quản trị | Dashboard, quản lý bãi và chỗ đỗ, phân công nhân viên, duyệt đặt chỗ và xem doanh thu mọi bãi |
+| Nhân viên | Theo dõi lịch đặt tại bãi phụ trách, nhận xe, trả xe, ghi nhận thanh toán và xem doanh thu từng bãi được phân công |
+| Quản trị | Dashboard, quản lý bãi và chỗ đỗ, phân công nhân viên, theo dõi lịch đặt và xem doanh thu mọi bãi |
 
-Đăng nhập dùng Identity bearer token, hết hạn sau 30 phút, lưu trong `sessionStorage` của tab trình duyệt. Frontend gọi `/api/me` để lấy quyền; API kiểm tra quyền trên từng endpoint. Để bật OTP, đăng nhập và mở **Bảo mật**, xác nhận mật khẩu, quét QR trong ứng dụng xác thực rồi nhập mã 6 số. Cất mã khôi phục trước khi rời trang. Mỗi mã khôi phục chỉ dùng được một lần. OTP không cần dịch vụ SMS hoặc email.
+Đăng nhập bằng email hoặc số điện thoại riêng đã lưu và mật khẩu. Số Việt Nam có thể nhập dạng 09… hoặc +849…. Các tài khoản cũ có số trùng nhau vẫn đăng nhập bằng email để cập nhật lại số. Đăng nhập dùng Identity bearer token, hết hạn sau 30 phút, lưu trong `sessionStorage` của tab trình duyệt. Frontend gọi `/api/me` để lấy quyền; API kiểm tra quyền trên từng endpoint. Để bật OTP, đăng nhập và mở **Bảo mật**, xác nhận mật khẩu, quét QR trong ứng dụng xác thực rồi nhập mã 6 số. Cất mã khôi phục trước khi rời trang. Mỗi mã khôi phục chỉ dùng được một lần. OTP không cần dịch vụ SMS hoặc email.
 
 Sơ đồ 3D sắp xếp vị trí từ mã chỗ. Xe màu ngọc lam đánh dấu ô được chọn hoặc xe của khách trong mục **Xe đang gửi**. Dự báo dùng k láng giềng gần nhất có trọng số cho 12 giờ tiếp theo, 7 ngày đầy đủ tiếp theo hoặc 4 tuần đầy đủ tiếp theo (thứ Hai đến Chủ Nhật, giờ Việt Nam). Chế độ ngày và tuần hiển thị trung bình và mức thấp nhất. Mô hình dựa trên thứ và giờ nên các tuần có thể giống nhau. API ưu tiên lịch sử vận hành nếu có ít nhất 20 lượt hoàn tất và trải dài 14 ngày, giữ 3 ngày gần nhất để kiểm tra. Khi chưa đủ lịch sử, 8 bãi Đà Nẵng dùng CSV và biểu đồ ghi rõ nguồn mô phỏng. Dự báo không tính lịch đặt sắp tới.
 
-## Duyệt đặt chỗ
+## Đặt chỗ tự động bằng tiền cọc
 
-Khách gửi yêu cầu ở **Đặt chỗ**. Yêu cầu giữ ô trong khung giờ đã chọn trong lúc chờ duyệt. Nếu bị từ chối, bị hủy hoặc quá giờ đến mà chưa xác nhận, ô được mở lại cho khung giờ đó. Khách theo dõi trạng thái và lý do từ chối ở **Đặt chỗ của tôi**.
+Khách nạp tiền ở **Số dư** bằng VietQR. Sau khi quản trị viên đối soát khoản nạp, số dư khả dụng dùng được để đặt chỗ. Tại **Đặt chỗ**, khách xem tổng phí dự kiến, cọc bằng một giờ gửi và số tiền dự kiến trả thêm. Nút **Đặt cọc và xác nhận** giữ tiền trong ví và xác nhận ô trong cùng một giao dịch. Khi số dư thiếu hoặc ô vừa có người đặt, khách nhận thông báo ngay.
 
-Admin mở **Nhân viên → Phân công bãi** để chọn các bãi nhân viên được duyệt yêu cầu. Admin duyệt được mọi bãi trong **Duyệt đặt chỗ**. Yêu cầu đã xác nhận xuất hiện khi tra lịch đặt ở cổng vào.
+Hủy trước giờ hẹn được hoàn toàn bộ cọc. Từ giờ hẹn, khách hủy hoặc vắng mặt sẽ mất cọc. Hạn nhận xe là thời điểm sớm hơn giữa giờ hẹn cộng 15 phút và giờ lấy xe. Bãi hủy lịch trước hạn nhận xe sẽ hoàn toàn bộ cọc. Khi nhận xe, nhân viên chọn lịch ở **Nhận xe**. Khi xe ra, hệ thống trừ cọc vào tổng phí đã tính cả gia hạn và phụ phí, trả lại phần cọc dư nếu có và chỉ thu phần còn thiếu. Cọc đang giữ được tách khỏi doanh thu.
+
+Nhân viên theo dõi **Lịch đặt theo bãi** trong phạm vi được giao. Đơn cũ chờ xác nhận vẫn có thể được xử lý ở cuối trang. Đơn cũ không bị giữ cọc hồi tố. Chạy `dotnet ef database update --project backend/Parking.Api` khi cập nhật từ bản trước.
 
 ## Chuyển khoản QR
 
@@ -165,18 +183,19 @@ Trong **Số dư**, khách tạo yêu cầu nạp và chuyển đúng số tiề
 
 Mở **Doanh thu**, chọn bãi và kỳ ngày, tháng hoặc năm. Kỳ ngày chia theo giờ, kỳ tháng chia theo ngày và kỳ năm chia theo tháng. Chọn một cột trên biểu đồ để xem số tiền theo phương thức thanh toán và đối chiếu hàng tương ứng trong bảng.
 
-Hệ thống tính doanh thu theo giờ Việt Nam (UTC+7), dựa trên lúc ghi nhận thanh toán phí gửi xe. Tiền nạp số dư chỉ trở thành doanh thu khi khách dùng số dư để trả phí. API kiểm tra phân công trên mỗi yêu cầu báo cáo. Admin có thể chọn mọi bãi và nhân viên chọn được các bãi mình phụ trách.
+Hệ thống tính doanh thu theo giờ Việt Nam (UTC+7), dựa trên lúc ghi nhận thanh toán phí gửi xe. Doanh thu gồm khoản cọc đã khấu trừ vào phí, cọc đã thu do khách hủy muộn hoặc vắng mặt và phần phí còn lại đã thanh toán. Tiền nạp và cọc đang giữ chưa được tính vào doanh thu. API kiểm tra phân công trên mỗi yêu cầu báo cáo. Admin có thể chọn mọi bãi và nhân viên chọn được các bãi mình phụ trách.
 
 ## API chính
 
 | Nhóm | Endpoint | Quyền |
 | --- | --- | --- |
-| Đăng ký, đăng nhập | `/api/auth/register`, `/api/auth/login` | Công khai |
+| Đăng ký, đăng nhập | `POST /api/accounts` (kèm hồ sơ), `POST /api/auth/register` (email và mật khẩu), `POST /api/auth/login` | Công khai |
 | Bãi xe | `GET /api/parking-lots`; POST/PUT/DELETE cùng nhóm | Công khai để xem, Admin để sửa |
 | Chỗ đỗ | `GET /api/parking-spots`; POST và PATCH `/{id}/active` | Công khai để xem, Admin/Staff để sửa |
 | Xe | `GET /api/vehicles/mine`, `POST /api/vehicles` | Đã đăng nhập |
 | Đặt chỗ | `GET /api/reservations/mine`, `POST /api/reservations`, `POST /{id}/cancel` | Đã đăng nhập |
-| Duyệt đặt chỗ | `GET /api/reservations/pending`, `POST /api/reservations/{id}/approve`, `POST /api/reservations/{id}/reject` | Admin hoặc Staff phụ trách bãi |
+| Xử lý đơn cũ | `GET /api/reservations/pending`, `POST /api/reservations/{id}/approve`, `POST /api/reservations/{id}/reject` | Admin hoặc Staff phụ trách bãi |
+| Lịch đã xác nhận, hủy từ phía bãi | `GET /api/reservations/upcoming`, `POST /api/reservations/{id}/release` | Admin hoặc Staff phụ trách bãi |
 | Lịch xe vào theo bãi | `GET /api/reservations/arrivals` | Admin hoặc Staff phụ trách bãi |
 | Gửi xe | `POST /api/parking-sessions/check-in`, `POST /{id}/check-out`, `GET /active` | Admin/Staff |
 | Khách trả xe | `GET /api/parking-sessions/mine/{id}/checkout-quote`, `POST /api/parking-sessions/mine/{id}/check-out` | Chủ lượt gửi |
@@ -191,7 +210,7 @@ Hệ thống tính doanh thu theo giờ Việt Nam (UTC+7), dựa trên lúc ghi
 | Thống kê | `GET /api/dashboard/summary` | Admin/Staff |
 | Báo cáo doanh thu | `GET /api/dashboard/revenue?lotId=1&period=month&date=2026-11-01` | Admin hoặc Staff phụ trách bãi |
 | Nhân viên | `POST /api/admin/staff`, `PUT /api/admin/staff/{id}/lots`, `DELETE /api/admin/staff/{id}` | Admin |
-| Hồ sơ tài khoản | `GET /api/me`, `PUT /api/me` (tên hiển thị, số liên hệ) | Chủ tài khoản |
+| Hồ sơ tài khoản | `GET /api/me`, `PUT /api/me` (tên người dùng, số điện thoại, địa chỉ, CCCD) | Chủ tài khoản |
 | Tra xe và lịch đặt | `GET /api/vehicles/search?plate=`, `GET /api/reservations/active?plate=` | Admin/Staff |
 | Sơ đồ trạng thái | `GET /api/parking-spots/map?parkingLotId=` | Công khai |
 | Dự báo | `GET /api/parking-lots/{id}/forecast?period=hour\|day\|week&type=` | Công khai |

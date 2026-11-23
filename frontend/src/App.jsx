@@ -1,12 +1,15 @@
-import { useState } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import Icon from './components/Icon'
-import ParkingArtwork from './components/ParkingArtwork'
+import { parkingTones } from './lib/parkingLayout'
+import { spotStatus } from './lib/format'
+import ParkingPlan from './components/ParkingPlan'
 import { useAuth } from './auth/useAuth'
 import { portalFor, portalPaths } from './lib/portal'
 import { useResource } from './lib/useResource'
 import './App.css'
 
+const CityLotMap = lazy(() => import('./components/CityLotMap'))
 const spotFilters = [[0, 'Tất cả'], [2, 'Ô tô'], [1, 'Xe máy']]
 
 const guide = [
@@ -20,24 +23,58 @@ const operatorLinks = {
   staff: 'Mở ca trực',
 }
 
-function HomeHero({ operation, area }) {
+function HomeHero({ operation, area, lots, busy, error, retry }) {
+  const [selection, setSelection] = useState('')
+  const [mode, setMode] = useState('city')
+  const catalogue = useResource('/api/parking-search/destinations')
+  const locations = useMemo(() => lots.flatMap((item) => {
+    const point = catalogue.data?.find((entry) => entry.lotName === item.name && entry.address === item.address)
+    return point && Number.isFinite(point.latitude) && Number.isFinite(point.longitude)
+      ? [{ ...item, latitude: point.latitude, longitude: point.longitude }] : []
+  }), [lots, catalogue.data])
+  const lot = lots.find((item) => String(item.id) === selection) || locations[0] || lots[0]
+  const hasCoordinates = locations.some((item) => item.id === lot?.id)
+  const city = mode === 'city' && hasCoordinates
+  const map = useResource(lot ? '/api/parking-spots/map?parkingLotId=' + lot.id : null, undefined, { refreshInterval: 30000 })
+  const vacant = map.data?.filter((spot) => spot.status === 'Available').length
   return <section className="landing-hero" aria-labelledby="hero-title">
     <div className="hero-copy">
-      <h1 id="hero-title">Tìm bãi đỗ xe</h1>
+      <span className="city-label"><Icon name="pin" size={16} /> Đà Nẵng</span>
+      <h1 id="hero-title">{operation ? (area === 'staff' ? 'Theo dõi bãi phụ trách' : 'Theo dõi các bãi xe') : 'Tìm chỗ đỗ tại Đà Nẵng'}</h1>
       <p>{operation ? 'Tra cứu bãi, kiểm tra sơ đồ và trạng thái các ô đỗ.' : 'Tìm bãi theo địa chỉ, xem chỗ trống trên sơ đồ và đặt trước khi đến.'}</p>
       <div className="hero-buttons">
         {operation ?
           <Link className="landing-button hero-primary" to={portalPaths[area]}>{operation} <Icon name="arrow" size={18} /></Link> :
-          <Link className="landing-button hero-primary" to="/#lots"><Icon name="search" size={18} /> Xem danh sách bãi</Link>}
+          <Link className="landing-button hero-primary" to="/parking-search"><Icon name="search" size={18} /> Tìm bãi theo giờ đến</Link>}
         {operation ?
           <Link className="landing-button hero-secondary" to="/#lots">Xem danh sách bãi</Link> :
-          <Link className="landing-button hero-secondary" to="/reservations">Đặt chỗ trước <Icon name="arrow" size={17} /></Link>}
+          <Link className="landing-button hero-secondary" to="/#lots">Xem danh sách bãi <Icon name="arrow" size={17} /></Link>}
       </div>
     </div>
-    <figure className="hero-visual">
-      <ParkingArtwork />
-      <figcaption><span>Sơ đồ minh họa</span><span><i /> Trống</span><span><i /> Có xe</span><span><i /> Đã đặt</span></figcaption>
-    </figure>
+    <section className="live-plan" aria-label="Sơ đồ bãi xe">
+      <div className="live-plan-head"><label htmlFor="home-lot">Chọn bãi xe</label>
+        {!!lots.length && <select id="home-lot" value={lot.id} onChange={(event) => setSelection(event.target.value)}>
+          {lots.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+        </select>}
+      </div>
+      {!!locations.length && <div className="city-modes" role="group" aria-label="Loại bản đồ">
+        <button type="button" aria-pressed={city} disabled={!hasCoordinates} onClick={() => setMode('city')}>Bản đồ thành phố</button>
+        <button type="button" aria-pressed={!city} onClick={() => setMode('plan')}>Sơ đồ ô đỗ</button>
+      </div>}
+      {city ? <Suspense fallback={<div className="live-surface">Đang mở bản đồ…</div>}>
+        <CityLotMap locations={locations} selectedId={lot.id} onChoose={setSelection} />
+      </Suspense> : <div className="live-surface">
+        {busy || map.loading ? <p role="status">Đang tải sơ đồ…</p> : error || map.error ?
+          <div role="status">Chưa tải được sơ đồ. <button type="button" onClick={error ? retry : map.refresh}>Thử lại</button></div> :
+          map.data?.length ? <div className="map-key-layout"><ParkingPlan spots={map.data} />
+            <dl className="map-key" aria-label="Tình trạng ô đỗ">
+              {Object.entries(parkingTones).map(([status, color]) => <div key={status}><dt><i style={{background: color}} />{spotStatus[status]}</dt><dd>{map.data.filter((spot) => spot.status === status).length}</dd></div>)}
+            </dl></div> : <p>{lot ? 'Bãi chưa có ô đỗ.' : 'Chưa có bãi để hiển thị.'}</p>}
+      </div>}
+      {city && <small className="city-note">Vị trí bãi trên bản đồ mang tính gần đúng.</small>}
+      {lot && catalogue.data && !hasCoordinates && <small className="city-note">Bãi này chưa có tọa độ. Bạn có thể mở chỉ đường theo địa chỉ trong danh sách bãi.</small>}
+      {lot && <div className="live-plan-foot"><span>{vacant != null ? vacant + ' ô trống hiện tại' : lot.name}</span><Link to={'/lots/' + lot.id}>Mở sơ đồ ↗</Link></div>}
+    </section>
   </section>
 }
 
@@ -49,7 +86,8 @@ function LotCard({ lot, activeCount }) {
     </div>
     <h3>{lot.name}</h3>
     <p><Icon name="pin" size={16} /> {lot.address}</p>
-    <Link to={'/lots/' + lot.id} aria-label={'Xem sơ đồ ' + lot.name}>Xem sơ đồ <Icon name="arrow" size={17} /></Link>
+    <div className="lot-actions"><a href={'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent([lot.name, lot.address].filter(Boolean).join(', '))} target="_blank" rel="noreferrer" aria-label={'Chỉ đường đến ' + lot.name}>Chỉ đường ↗</a>
+    <Link to={'/lots/' + lot.id} aria-label={'Xem sơ đồ ' + lot.name}>Xem sơ đồ <Icon name="arrow" size={17} /></Link></div>
   </article>
 }
 
@@ -89,7 +127,7 @@ export default function App() {
   }
 
   return <main className="page-wrap home-page">
-    <HomeHero operation={operation} area={area} />
+    <HomeHero operation={operation} area={area} lots={lotRows} busy={lots.loading} error={lots.error} retry={lots.refresh} />
     <dl className="landing-metrics" aria-label="Tổng quan hệ thống">
       {metrics.map(([icon, value, label]) => <div key={label}>
         <span className="metric-icon"><Icon name={icon} size={18} /></span>

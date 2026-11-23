@@ -5,7 +5,7 @@ import { spotStatus } from '../lib/format'
 import { parkingLayout } from '../lib/parkingLayout'
 import { buildParkingWorld } from './ParkingWorld'
 
-export default function SpotScene({ spots, selectedId, filter = 0, onSelect, preview = false, fallback }) {
+export default function SpotScene({ spots, selectedId, filter = 0, onSelect, preview = false, interactivePreview = false, fallback }) {
   const host = useRef(null)
   const live = useRef({ selectedId, filter, onSelect })
   const view = useRef(null)
@@ -91,7 +91,7 @@ export default function SpotScene({ spots, selectedId, filter = 0, onSelect, pre
     const ray = new THREE.Raycaster()
     const pointerDown = (event) => { down = [event.clientX, event.clientY] }
     const pointerUp = (event) => {
-      if (preview || !down || Math.hypot(event.clientX - down[0], event.clientY - down[1]) > 6) return
+      if ((preview && !interactivePreview) || !down || Math.hypot(event.clientX - down[0], event.clientY - down[1]) > 6) return
       const rect = canvas.getBoundingClientRect()
       ray.setFromCamera(new THREE.Vector2((event.clientX - rect.left) / rect.width * 2 - 1, 1 - (event.clientY - rect.top) / rect.height * 2), camera)
       const target = ray.intersectObjects(world.targets, false).find(({ object }) => !live.current.filter || object.userData.spot.type === live.current.filter)
@@ -113,7 +113,7 @@ export default function SpotScene({ spots, selectedId, filter = 0, onSelect, pre
       renderer.dispose()
       canvas.remove()
     }
-  }, [spots, preview, unavailable])
+  }, [spots, preview, interactivePreview, unavailable])
 
   return <>
     {unavailable ? <><div className="scene-fallback"><p>Trình duyệt chưa mở được 3D. {fallback ? 'Đang hiển thị sơ đồ 2D.' : 'Bạn có thể chuyển sang 2D hoặc dùng danh sách vị trí.'}</p></div>{fallback}</> :

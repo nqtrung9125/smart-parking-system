@@ -8,7 +8,7 @@ import './revenue.css'
 
 const periods = { day: 'Ngày', month: 'Tháng', year: 'Năm' }
 const bucketLabels = { day: 'Giờ', month: 'Ngày', year: 'Tháng' }
-const methods = [[1, 'Tiền mặt'], [3, 'VietQR'], [4, 'Số dư'], [2, 'Thẻ mô phỏng']]
+const methods = [[1, 'Tiền mặt'], [3, 'VietQR'], [4, 'Số dư'], [2, 'Thẻ mô phỏng'], [5, 'Tiền cọc đã thu']]
 const inVietnam = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh', dateStyle: 'short' })
 
 function bucketLabel(period, index) {
@@ -37,7 +37,7 @@ function RevenueDetails({ report }) {
         <p>{report.lot.name} · Giờ Việt Nam</p>
       </div>{selected && <button className="button light-button" type="button" onClick={() => setPicked(null)}>Xem cả kỳ</button>}</div>
 
-      {!report.paymentCount && <p className="helper-text">Chưa có lượt thanh toán trong kỳ đã chọn.</p>}
+      {!report.revenue && <p className="helper-text">Chưa có lượt thanh toán trong kỳ đã chọn.</p>}
       <div className="revenue-scroll">
         <div className="revenue-bars" style={{ '--bucket-count': report.periods.length }}>
           {report.periods.map((bucket) => {

@@ -223,6 +223,10 @@ namespace Parking.Api.Migrations
                     b.Property<string>("UserId")
                         .HasColumnType("text");
 
+                    b.Property<string>("Address")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
                     b.Property<string>("ContactPhone")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
@@ -231,7 +235,17 @@ namespace Parking.Api.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
 
+                    b.Property<string>("LoginPhone")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("ProtectedCitizenId")
+                        .HasColumnType("text");
+
                     b.HasKey("UserId");
+
+                    b.HasIndex("LoginPhone")
+                        .IsUnique();
 
                     b.ToTable("AccountProfiles");
                 });
@@ -245,6 +259,85 @@ namespace Parking.Api.Migrations
                     b.HasKey("Code");
 
                     b.ToTable("BankReceipts");
+                });
+
+            modelBuilder.Entity("Parking.Api.Models.ForecastObservation", b =>
+                {
+                    b.Property<int>("ParkingLotId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("ObservedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("TargetUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Capacity")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ConfirmedAtTarget")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("OccupiedNow")
+                        .HasColumnType("integer");
+
+                    b.HasKey("ParkingLotId", "Type", "ObservedUtc", "TargetUtc");
+
+                    b.HasIndex("ObservedUtc");
+
+                    b.ToTable("ForecastObservations");
+                });
+
+            modelBuilder.Entity("Parking.Api.Models.ParkingExtension", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AccruedLateDays")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("AccruedLateFee")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<decimal>("EstimatedFee")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<int>("ParkingSessionId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("PreviousEndUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("RequestedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("RequestedEndUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ReviewedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReviewedById")
+                        .HasColumnType("text");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParkingSessionId")
+                        .IsUnique()
+                        .HasFilter("\"Status\" = 1");
+
+                    b.ToTable("ParkingExtensions");
                 });
 
             modelBuilder.Entity("Parking.Api.Models.ParkingLot", b =>
@@ -293,6 +386,10 @@ namespace Parking.Api.Migrations
 
                     b.Property<DateTime?>("CheckOutUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("DepositApplied")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
 
                     b.Property<decimal>("EarlyExitFee")
                         .HasPrecision(12, 2)
@@ -410,6 +507,9 @@ namespace Parking.Api.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime?>("ArrivalDeadlineUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<decimal>("BookedEarlyExitFee")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");
@@ -426,7 +526,21 @@ namespace Parking.Api.Migrations
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");
 
+                    b.Property<Guid?>("BookingRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("CapturedDeposit")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
                     b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("DepositAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<DateTime?>("DepositSettledUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("EndUtc")
@@ -461,9 +575,13 @@ namespace Parking.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("OwnerId");
+                    b.HasIndex("ArrivalDeadlineUtc")
+                        .HasFilter("\"Status\" = 1 AND \"ArrivalDeadlineUtc\" IS NOT NULL");
 
                     b.HasIndex("VehicleId");
+
+                    b.HasIndex("OwnerId", "BookingRequestId")
+                        .IsUnique();
 
                     b.HasIndex("ParkingSpotId", "StartUtc", "EndUtc");
 
@@ -635,6 +753,26 @@ namespace Parking.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Parking.Api.Models.ForecastObservation", b =>
+                {
+                    b.HasOne("Parking.Api.Models.ParkingLot", null)
+                        .WithMany()
+                        .HasForeignKey("ParkingLotId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Parking.Api.Models.ParkingExtension", b =>
+                {
+                    b.HasOne("Parking.Api.Models.ParkingSession", "ParkingSession")
+                        .WithMany()
+                        .HasForeignKey("ParkingSessionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ParkingSession");
                 });
 
             modelBuilder.Entity("Parking.Api.Models.ParkingSession", b =>

@@ -8,6 +8,7 @@ import { dateTime, money, parkingDuration, vehicleType } from '../lib/format'
 import { Notice, Loading, Empty, Field } from '../components/Ui'
 import QrImage from '../components/QrImage'
 import ParkingFeeBreakdown from '../components/ParkingFeeBreakdown'
+import ParkingExtensionQueue from '../components/ParkingExtensionQueue'
 
 function GateHeader({ outbound = false }) {
   return <div className="portal-hero gate-hero">
@@ -23,6 +24,9 @@ function GateHeader({ outbound = false }) {
 }
 
 function ArrivalQueue({ lots, arrivals, busy, onCheckIn }) {
+  const [filterId, setFilterId] = useState('')
+  const selected = lots.find((lot) => String(lot.id) === filterId)
+  const visibleLots = selected ? [selected] : lots
   const groups = new Map(lots.map((lot) => [lot.id, []]))
   for (const arrival of arrivals.data || []) groups.get(arrival.lotId)?.push(arrival)
 
@@ -31,7 +35,10 @@ function ArrivalQueue({ lots, arrivals, busy, onCheckIn }) {
       <div><h2 id="arrivals-title">Lịch xe vào theo bãi</h2><p>Các lịch đã xác nhận còn hiệu lực hoặc sẽ đến trong 24 giờ tới.</p></div>
       <button type="button" className="button light-button" disabled={busy || arrivals.loading} onClick={arrivals.refresh}>Cập nhật</button>
     </div>
-    {arrivals.loading ? <Loading /> : arrivals.error ? <Notice error={arrivals.error} /> : lots.map((lot) => <section className="arrival-group" key={lot.id}>
+    {lots.length > 1 && <Field label="Bãi phụ trách"><select value={selected?.id || ''} onChange={(event) => setFilterId(event.target.value)}>
+      <option value="">Tất cả bãi phụ trách</option>{lots.map((lot) => <option key={lot.id} value={lot.id}>{lot.name}</option>)}
+    </select></Field>}
+    {arrivals.loading ? <Loading /> : arrivals.error ? <Notice error={arrivals.error} /> : visibleLots.map((lot) => <section className="arrival-group" key={lot.id}>
       <h3>{lot.name}</h3>
       {groups.get(lot.id).length ? <ul className="reservation-list">{groups.get(lot.id).map((item) =>
         <li className="reservation-list-item" key={item.id}>
@@ -118,7 +125,7 @@ export function StaffCheckInPage() {
 
 export function StaffCheckOutPage() {
   const { token } = useAuth()
-  const active = useResource('/api/parking-sessions/active', token)
+  const active = useResource('/api/parking-sessions/active', token, { refreshInterval: 15000 })
   const unpaid = useResource('/api/parking-sessions/unpaid', token)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -135,7 +142,7 @@ export function StaffCheckOutPage() {
     setBusyId(id); setError(''); setMessage('')
     try {
       const result = await api(`/api/parking-sessions/${id}/check-out`, { method: 'POST', token })
-      setMessage(`Đã ghi nhận xe ra. Phí cần thanh toán: ${money(result.fee)}.`)
+      setMessage(`Đã ghi nhận xe ra. Phí cần thanh toán: ${money(result.amountDue)}.`)
       active.refresh(); unpaid.refresh()
     } catch (cause) { setError(cause.message) } finally { setBusyId(null) }
   }
@@ -162,15 +169,17 @@ export function StaffCheckOutPage() {
       <div className="panel-head"><h2>Xe đang trong bãi</h2><span className="gate-count">{active.data?.length ?? '—'} xe</span></div>
       {active.loading ? <Loading /> : active.error ? null : !activeMatches.length ? <Empty>{plateQuery ? 'Không có xe phù hợp.' : 'Hiện không có xe đang gửi.'}</Empty> :
         <div className="data-list">{activeMatches.map((item) => <div className="data-item" key={item.id}>
-          <div><strong>{item.plateNumber} · Ô {item.code}</strong><span>{item.lotName} · Vào bãi {dateTime(item.checkInUtc)} · Lượt #{item.id}</span></div>
+          <div><strong>{item.plateNumber} · Ô {item.code}</strong><span>{item.lotName} · Vào bãi {dateTime(item.checkInUtc)} · Lượt #{item.id}</span>
+            {item.scheduledEndUtc && <span>Dự kiến lấy xe {dateTime(item.scheduledEndUtc)}</span>}</div>
           <button className="button main-button" disabled={busyId != null} onClick={() => checkOut(item.id)}>Ghi nhận xe ra</button>
         </div>)}</div>}
     </section>
+    <ParkingExtensionQueue token={token} onReview={active.refresh} />
     <section className="panel gate-queue section-gap">
       <div className="panel-head"><h2>Chờ thanh toán</h2><span className="gate-count">{unpaid.data?.length ?? '—'} lượt</span></div>
       {unpaid.loading ? <Loading /> : unpaid.error ? null : !unpaidMatches.length ? <Empty>{plateQuery ? 'Không có lượt phù hợp.' : 'Không có lượt gửi chờ thanh toán.'}</Empty> :
         <div className="data-list">{unpaidMatches.map((item) => <div className="data-item" key={item.id}>
-          <div><strong>{item.plateNumber} · {money(item.fee)}</strong><span>{item.lotName} · Ra bãi {dateTime(item.checkOutUtc)} · Gửi {parkingDuration(Date.parse(item.checkOutUtc) - Date.parse(item.checkInUtc))} · Lượt #{item.id}</span><ParkingFeeBreakdown charge={item} /></div>
+          <div><strong>{item.plateNumber} · {money(item.amountDue)} còn phải thu</strong>{item.depositApplied > 0 && <span>Tổng phí {money(item.fee)} · Đã trừ cọc {money(item.depositApplied)}</span>}<span>{item.lotName} · Ra bãi {dateTime(item.checkOutUtc)} · Gửi {parkingDuration(Date.parse(item.checkOutUtc) - Date.parse(item.checkInUtc))} · Lượt #{item.id}</span><ParkingFeeBreakdown charge={item} /></div>
           <div className="payment-actions">
             <button className="button light-button" disabled={busyId != null} onClick={() => openTransfer(item.id)}>Chuyển khoản QR</button>
             <button className="button main-button" disabled={busyId != null} onClick={() => pay(item.id)}>Đã thu tiền mặt</button>
