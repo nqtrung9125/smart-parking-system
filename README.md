@@ -1,231 +1,158 @@
 # Smart Parking System
 
-Ứng dụng quản lý bãi đỗ xe cho môn Lập trình web nâng cao. React và Vite phục vụ giao diện, ASP.NET Core Web API phục vụ nghiệp vụ, PostgreSQL lưu dữ liệu trong Docker.
+Smart Parking là đồ án quản lý bãi đỗ xe tại Đà Nẵng. Khách tìm ô trên bản đồ, xem phí và đặt cọc qua web hoặc chat. Nhân viên quản lý lượt xe tại bãi được phân công. Quản trị viên quản lý bãi, phân công nhân viên và theo dõi doanh thu.
+
+**Công nghệ** · React + Vite · ASP.NET Core Web API (.NET 10) · EF Core · PostgreSQL 17 trong Docker · Gemini API
+
+[Cài đặt](#cài-đặt-trên-windows) · [Ba tài khoản mẫu](#ba-tài-khoản-mẫu) · [Dùng thử](#dùng-thử-một-lượt-gửi-xe) · [Trợ lý AI](#bật-trợ-lý-ai) · [Xử lý lỗi](#xử-lý-lỗi-thường-gặp)
 
 ## Cài đặt trên Windows
 
-Cài **.NET SDK 10**, **Node.js 22.12 trở lên**, **Git** và **Docker Desktop**. Mở Docker Desktop trước khi chạy lệnh. Các lệnh bên dưới dùng PowerShell tại thư mục gốc dự án. [Tải .NET SDK](https://dotnet.microsoft.com/en-us/download/dotnet/10.0) · [Yêu cầu Node.js của Vite](https://v8.vite.dev/guide/) · [Cài Docker Desktop](https://docs.docker.com/get-docker/desktop/)
+Cài **PowerShell 7**, **Git**, **.NET SDK 10**, **Node.js 22.12 trở lên** và **Docker Desktop**. Mở Docker Desktop và chờ Docker Engine chạy. Các lệnh dùng PowerShell 7 từ thư mục gốc của repository. [PowerShell](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) · [.NET SDK](https://dotnet.microsoft.com/en-us/download/dotnet/10.0) · [Yêu cầu của Vite](https://vite.dev/guide/) · [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/)
 
-### 1. Tải mã nguồn và kiểm tra công cụ
-
-```powershell
-git clone https://github.com/nqtrung9125/smart-parking-system.git
-cd smart-parking-system
-
-dotnet --version
-node --version
-docker compose version
-```
-
-Nếu đã clone dự án, mở đúng thư mục đó và dùng `git pull` để cập nhật nhánh đang làm.
-
-### 2. Khởi động PostgreSQL
-
-Trên bản clone mới, tạo mật khẩu ngẫu nhiên và lưu cấu hình Docker vào `smart-parking-db/.env`. Với bản đã có database, sử dụng thông tin trong file `.env` hiện có.
+### 1. Tải mã nguồn và chạy PostgreSQL
 
 ```powershell
-$dbPassword = [guid]::NewGuid().ToString('N')
-@(
-    'POSTGRES_DB=parking_db'
-    'POSTGRES_USER=parking_app'
-    "POSTGRES_PASSWORD=$dbPassword"
-) | Set-Content ./smart-parking-db/.env -Encoding ascii
+git clone --branch main https://github.com/nqtrung9125/smart-parking-system.git
+Set-Location smart-parking-system
 
-docker compose --env-file ./smart-parking-db/.env -f ./smart-parking-db/compose.yaml up -d
-docker compose --env-file ./smart-parking-db/.env -f ./smart-parking-db/compose.yaml ps
+$dbEnv = './smart-parking-db/.env'
+if (-not (Test-Path $dbEnv)) {
+    @(
+        'POSTGRES_DB=parking_db'
+        'POSTGRES_USER=parking_app'
+        "POSTGRES_PASSWORD=$([guid]::NewGuid().ToString('N'))"
+    ) | Set-Content -LiteralPath $dbEnv -Encoding ascii
+}
+
+docker compose --env-file $dbEnv -f ./smart-parking-db/compose.yaml up -d --wait
 ```
 
-Chờ dịch vụ `postgres` báo `healthy`. Cổng PostgreSQL trên máy là **5433**. Docker lưu dữ liệu trong volume `parking_pgdata`.
+PostgreSQL nhận kết nối ở cổng **5433** trên máy Windows. Docker giữ dữ liệu trong volume `parking_pgdata`. Khi cài lại dự án trên cùng máy, dùng file `.env` và mật khẩu đã tạo cho volume đó.
 
-### 3. Cấu hình API và tạo bảng
+### 2. Cấu hình API, chạy migration và nạp dữ liệu
 
 ```powershell
 $db = Get-Content ./smart-parking-db/.env -Raw | ConvertFrom-StringData
 $connection = "Host=localhost;Port=5433;Database=$($db.POSTGRES_DB);Username=$($db.POSTGRES_USER);Password=$($db.POSTGRES_PASSWORD)"
-dotnet user-secrets set "ConnectionStrings:ParkingDb" $connection --project ./backend/Parking.Api
-
-dotnet user-secrets set "BootstrapAdmin:Email" "admin@example.test" --project ./backend/Parking.Api
-$adminInput = Read-Host "Nhap mat khau Admin can tao" -AsSecureString
-$adminPassword = [pscredential]::new('admin', $adminInput).GetNetworkCredential().Password
-dotnet user-secrets set "BootstrapAdmin:Password" $adminPassword --project ./backend/Parking.Api
+@{
+    'ConnectionStrings:ParkingDb' = $connection
+    'BootstrapAdmin:Email' = 'admin@example.test'
+    'BootstrapAdmin:Password' = (Read-Host -Prompt 'Nhap mat khau Admin local' -MaskInput)
+} | ConvertTo-Json -Compress | dotnet user-secrets set --project ./backend/Parking.Api
 
 dotnet tool restore
 $env:ASPNETCORE_ENVIRONMENT = 'Development'
 dotnet tool run dotnet-ef database update --project ./backend/Parking.Api --startup-project ./backend/Parking.Api
-```
-
-Chọn mật khẩu Admin có chữ hoa, chữ thường, chữ số và ký tự đặc biệt. API tạo Admin khi khởi động lần đầu trong môi trường Development. File `.env` và User Secrets lưu trên máy cài đặt.
-
-Muốn thử với dữ liệu Đà Nẵng, chạy lệnh sau trước khi mở API để sử dụng.
-
-```powershell
 dotnet run --project ./backend/Parking.Api --launch-profile http -- --seed-da-nang
 ```
 
-### 4. Chạy API và frontend
+Nhập mật khẩu có chữ hoa, chữ thường, chữ số và ký tự đặc biệt. Để dùng đúng tài khoản mẫu bên dưới, nhập mật khẩu Admin trong bảng. Lần chạy đầu ở chế độ Development có thể tạo tài khoản Admin. Lệnh cuối nạp **8 bãi và 254 ô đỗ** ở Đà Nẵng rồi tự thoát. Dữ liệu mô phỏng phục vụ đồ án và có thể nạp lại mà không tạo bãi trùng.
 
-**Terminal 1** tại thư mục gốc.
+### 3. Mở hai terminal để chạy ứng dụng
+
+**Terminal 1 · Backend**
 
 ```powershell
 dotnet dev-certs https --trust
 dotnet run --project ./backend/Parking.Api --launch-profile https
 ```
 
-Nếu dùng Visual Studio, mở `backend/Parking.Api/Parking.Api.csproj`, chọn profile **https** và nhấn **F5**. Dùng một trong hai cách chạy API để tránh trùng cổng.
+Nếu dùng Visual Studio, mở `backend/Parking.Api/Parking.Api.csproj`, chọn profile **https** rồi nhấn **F5**. Chạy một phiên API trên cổng 7171.
 
-**Terminal 2** tại thư mục gốc.
+**Terminal 2 · Frontend**
 
 ```powershell
 Set-Content ./frontend/.env 'VITE_API_BASE_URL=https://localhost:7171' -Encoding ascii
-Set-Location frontend
-npm ci
-npm run dev
+npm ci --prefix frontend
+npm run dev --prefix frontend -- --port 5173 --strictPort
 ```
 
-| Thành phần | Địa chỉ |
+| Mở trong trình duyệt | Kết quả cần thấy |
 | --- | --- |
-| Trang web | [localhost:5173](http://localhost:5173/) |
-| Kiểm tra API | [Danh sách bãi](https://localhost:7171/api/parking-lots) |
-| OpenAPI | [Mô tả endpoint](https://localhost:7171/openapi/v1.json) |
+| [Trang chủ](http://localhost:5173/) | Danh sách bãi và bản đồ Đà Nẵng |
+| [Kiểm tra API](https://localhost:7171/api/parking-lots) | Danh sách bãi dưới dạng JSON |
+| [OpenAPI](https://localhost:7171/openapi/v1.json) | Đường dẫn, tham số và định dạng của từng API |
 
-Nếu dùng profile **http**, đổi `VITE_API_BASE_URL` thành `http://localhost:5181` và khởi động lại Vite. Giữ cùng profile khi chạy backend. Sau khi cập nhật code có migration mới, chạy lại lệnh `database update` rồi khởi động lại API.
+Sau khi kéo bản mới về, chạy lại migration ở bước 2 nếu dự án có migration mới. Chạy lại `npm ci --prefix frontend` nếu `package-lock.json` thay đổi.
 
-### Lỗi thường gặp
+Nếu dùng profile **http** để thử local, đặt `VITE_API_BASE_URL=http://localhost:5181` trong `frontend/.env`, khởi động lại Vite và kiểm tra API tại [cổng 5181](http://localhost:5181/api/parking-lots).
 
-| Trình trạng | Cách xử lý |
-| --- | --- |
-| `Failed to fetch` | Mở đường dẫn kiểm tra API ở trên, kiểm tra profile và địa chỉ trong `frontend/.env`, rồi khởi động lại Vite nếu đã sửa file. |
-| Cổng 7171 đang được dùng | Dừng phiên API đang chạy rồi chạy lại ở Visual Studio hoặc terminal. |
-| PostgreSQL từ chối đăng nhập | So khớp database, user, mật khẩu và cổng trong User Secrets với cấu hình Docker. Volume đã tạo sử dụng thông tin đăng nhập ban đầu. |
-| API mới trả về 404 hoặc thiếu bảng | Build lại backend, chạy migration và khởi động lại API. |
-| Nhân viên không thấy bãi | Đăng nhập Admin, mở **Nhân viên → Phân công bãi** và lưu bãi phụ trách. Sau khi vừa cấp vai trò Nhân viên, đăng nhập lại. |
+## Ba tài khoản mẫu
 
-## Ba tài khoản mẫu để chạy thử local
+Các thông tin dưới đây dành cho môi trường local. Tạo tài khoản theo hướng dẫn để chúng có hiệu lực trên cơ sở dữ liệu của bạn.
 
-Các tài khoản dưới đây có hiệu lực sau khi tạo theo hướng dẫn. Dùng chúng cho bản cài đặt local phục vụ học tập.
-
-| Vai trò | Email mẫu | Mật khẩu mẫu | Có thể thử |
+| Vai trò | Email mẫu | Mật khẩu mẫu | Tạo tài khoản |
 | --- | --- | --- | --- |
-| Admin | `admin@example.test` | `ParkingAdmin!4729` | Quản lý bãi, phân công nhân viên, xem doanh thu mọi bãi |
-| Nhân viên | `staff@example.test` | `ParkingStaff!5731` | Theo dõi lịch đặt, nhận xe, trả xe và xem doanh thu bãi phụ trách |
-| Khách hàng | `customer@example.test` | `ParkingCustomer!6843` | Đăng ký xe, đặt chỗ, xác nhận xe ra và thanh toán |
+| Quản trị viên | `admin@example.test` | `ParkingAdmin!4729` | Tạo khi API khởi động ở Development với cấu hình trong bước 2. |
+| Nhân viên | `staff@example.test` | `ParkingStaff!5731` | Đăng ký, sau đó Admin cấp vai trò và phân công bãi. |
+| Khách hàng | `customer@example.test` | `ParkingCustomer!6843` | Đăng ký qua trang web. |
 
-1. **Admin.** Khi chạy bước cấu hình API trên database mới, giữ email `admin@example.test` và nhập mật khẩu mẫu của Admin, sau đó khởi động API với profile **https**.
-2. **Khách hàng và Nhân viên.** Mở **Đăng ký** hai lần, mỗi lần dùng email và mật khẩu tương ứng trong bảng. Nếu còn đăng nhập bằng tài khoản trước, đăng xuất trước khi đăng ký tài khoản kế tiếp. [Đăng ký trên máy local](http://localhost:5173/register)
-3. **Phân công bãi.** Đăng nhập Admin, mở **Nhân viên**, cấp quyền cho `staff@example.test`, rồi bấm **Phân công bãi**. Chọn **Bãi xe Bạch Đằng** nếu đã nạp dữ liệu Đà Nẵng, hoặc chọn bãi bạn đã tạo. Đăng nhập lại bằng tài khoản Nhân viên để thấy bãi trong trang **Doanh thu**. [Đăng nhập trên máy local](http://localhost:5173/login)
+1. Tạo tài khoản Nhân viên và Khách hàng, đăng xuất sau mỗi lần đăng ký. [Trang đăng ký](http://localhost:5173/register)
+2. Đăng nhập Admin, vào **Nhân viên**, cấp quyền cho `staff@example.test` rồi chọn **Phân công bãi**. Chọn **Bãi xe Cầu Rồng** để thử cùng kịch bản bên dưới. [Trang đăng nhập](http://localhost:5173/login)
+3. Đăng nhập lại bằng tài khoản Nhân viên. **Lịch đặt theo bãi**, **Nhận xe**, **Trả xe & thu phí** và **Doanh thu** hiển thị bãi trong phạm vi được giao.
 
-## Dữ liệu Đà Nẵng và bộ học máy
+Sau khi lưu số điện thoại riêng trong **Hồ sơ tài khoản**, bạn có thể đăng nhập bằng số đó hoặc email. Trang **Bảo mật** cho phép bật OTP từ ứng dụng xác thực và tải mã khôi phục dùng một lần.
 
-Mở **Tìm bãi theo giờ đến** từ trang chủ, chọn một điểm đến trong danh mục Đà Nẵng, loại xe và khung gửi. Kết quả hiển thị khoảng cách đường thẳng ước tính, số chỗ dự kiến còn vào giờ đến, số ô có thể đặt trong cả khung và phí nếu lấy xe đúng giờ. Bấm **Xem ô có thể đặt** để chuyển sang trang đặt chỗ với bãi và giờ đã chọn. Backend kiểm tra lại tình trạng ô, xe và phí khi gửi yêu cầu.
+## Dùng thử một lượt gửi xe
 
-## Trợ lý AI
+1. **Khách hàng** mở **Xe của tôi**, thêm một xe máy, rồi vào **Tìm bãi theo giờ**. Chọn **Cầu Rồng**, giờ đến và giờ lấy xe. Mở sơ đồ 2D hoặc 3D để chọn ô.
+2. **Nạp số dư** để giữ cọc. Khi bật VietQR theo hướng dẫn bên dưới, khách tạo yêu cầu nạp ở **Số dư**. Admin kiểm tra số tiền và mã giao dịch rồi duyệt ở **Duyệt nạp số dư**.
+3. **Đặt cọc và xác nhận.** Hệ thống hiển thị phí dự kiến, tiền cọc bằng một giờ gửi và khoản dự kiến trả thêm. Hủy trước giờ hẹn được hoàn cọc. Hủy từ giờ hẹn hoặc vắng mặt sẽ mất cọc. Hạn nhận xe là giờ hẹn cộng tối đa 15 phút, trong giới hạn giờ lấy xe.
+4. **Nhân viên** mở **Nhận xe** trong khung nhận xe của lịch. Sau khi nhân viên xác nhận xe vào, khách có thể xem **Tìm xe** trên sơ đồ, xin gia hạn và xem phí trước khi xe ra.
+5. **Trả xe và thanh toán.** Hệ thống khấu trừ cọc khi chốt phí. Khách xem hóa đơn trong **Thanh toán**. Nhân viên và Admin có thể đối chiếu số tiền đã thu trong **Doanh thu** theo ngày, tháng hoặc năm.
 
-Tạo khóa Gemini tại [Google AI Studio](https://aistudio.google.com/api-keys). Chạy từ thư mục gốc bằng PowerShell 7 để lưu khóa vào .NET User Secrets, rồi khởi động lại API.
+### Bật VietQR
+
+Chạy từ thư mục gốc với thông tin tài khoản nhận do đơn vị vận hành cấu hình, sau đó khởi động lại API.
+
+```powershell
+@{
+    'VietQr:BankBin' = (Read-Host 'Ma BIN ngan hang 6 chu so')
+    'VietQr:AccountNumber' = (Read-Host 'So tai khoan nhan')
+    'VietQr:AccountName' = (Read-Host 'Ten tai khoan nhan')
+} | ConvertTo-Json -Compress | dotnet user-secrets set --project ./backend/Parking.Api
+```
+
+Trên cơ sở dữ liệu trình bày, có thể nhập BIN `970422`, số tài khoản mẫu `0000000000` và tên `KIEM THU`. Tạo một yêu cầu nạp 50.000 đ bằng tài khoản khách, rồi duyệt bằng Admin với mã đối soát giả lập như `LOCAL-TEST-001`. Bỏ qua bước chuyển khoản trong kịch bản này. Khi vận hành thực tế, Admin cần đối chiếu sao kê trước khi duyệt. Doanh thu chỉ ghi các khoản đã thu, gồm phần cọc đã quyết toán và phí đã thanh toán.
+
+## Bật trợ lý AI
+
+Tạo khóa Gemini cho dự án Google AI Studio. Nhập khóa trong PowerShell tại thư mục gốc rồi khởi động lại API. [Tạo khóa](https://aistudio.google.com/api-keys)
 
 ```powershell
 @{ 'Assistant:ApiKey' = (Read-Host -Prompt 'Gemini API key' -MaskInput) } |
-  ConvertTo-Json -Compress |
-  dotnet user-secrets set --project ./backend/Parking.Api
+    ConvertTo-Json -Compress |
+    dotnet user-secrets set --project ./backend/Parking.Api
 ```
 
-Khi triển khai, cấu hình `Assistant__ApiKey` ở backend. Model mặc định là `gemini-3.5-flash-lite` và có thể đổi qua `Assistant__Model`. Sau khi đăng nhập, bấm **Trợ lý AI** và thử câu “Tìm chỗ xe máy gần Cầu Rồng ngày mai từ 19:00 đến 22:00”. Luồng đặt cọc cần xe đã đăng ký, bãi đã nạp dữ liệu và số dư đủ. Khách xem thẻ báo giá rồi xác nhận trong chat. Tin nhắn dùng để hiểu yêu cầu được gửi đến Gemini, còn dữ liệu tra từ tài khoản do backend trả thẳng cho giao diện. Tránh nhập mật khẩu, OTP và thông tin định danh vào khung chat.
+Mở **Trợ lý AI** ở góc dưới bên phải sau khi đăng nhập. Với tài khoản đã có xe và đủ tiền cọc, thử câu **“Đặt giúp mình chỗ cho xe máy gần Cầu Rồng, ngày mai từ 19:00 đến 22:00.”** Xem tên bãi, mã ô và báo giá, rồi bấm **Xác nhận đặt cọc** trong chat. Bạn nhận mã đặt chỗ khi hệ thống kiểm tra thành công.
 
-KNN theo giờ và thứ dùng dữ liệu mô phỏng khi lịch sử vận hành còn ít. API ghi nhận theo giờ số xe đang đỗ và số ô có lịch đã duyệt tại các mốc dự báo 1, 2, 6 và 24 giờ. Sau khi có đủ mẫu đã qua thời điểm dự báo, KNN có thể học thêm từ hai thông tin này. API dùng biến thể có ngữ cảnh nếu sai số trên cùng mẫu kiểm tra bằng hoặc thấp hơn KNN theo giờ và thứ. Nhân viên xem dự báo 12 giờ và lịch đã duyệt của bãi được giao. Quản trị viên có thêm biểu đồ đối chiếu và số lần dự báo còn chỗ khi bãi đầy trên tập kiểm tra.
-
-Sau bước migration, chạy từ thư mục gốc:
-
-```powershell
-dotnet run --project backend/Parking.Api --launch-profile http -- --seed-da-nang
-```
-
-Lệnh này tạo 8 bãi ở Đà Nẵng với 254 vị trí và trạng thái mô phỏng. Với bản đã cài trước đó, lệnh bỏ hậu tố `(Demo)` khỏi đúng các bãi đã tạo, giữ nguyên mã bãi và dữ liệu liên quan. Có thể chạy lại mà không thêm trùng. Địa chỉ và mặt bằng dùng cho đồ án, không xác nhận một bãi xe đang hoạt động ngoài thực tế.
-
-Bộ [dữ liệu học máy CSV](backend/Parking.Api/Data/Training/da-nang-occupancy.csv) gồm **17.472 dòng theo giờ**, 91 ngày, 8 bãi, có sức chứa và số chỗ có xe theo từng loại. Dữ liệu được sinh từ mẫu giờ cao điểm, ngày thường/cuối tuần và biến động ngẫu nhiên có thể tái tạo bằng `node scripts/generate-training-data.mjs`. CSV không chứa biển số hoặc thông tin tài khoản. API giữ lại 7 ngày cuối để đo sai số trên dữ liệu mô phỏng.
-
-Kịch bản trình bày: tìm **Bạch Đằng** → mở chi tiết → chọn **3D** → chọn một ô trống → **Đặt chỗ**. Trang đặt chỗ mở sẵn đúng ô và góc xem, có thể đổi giữa 2D và 3D trước khi xác nhận. Mở **Tài khoản** từ góc phải để xem vai trò, email và OTP, hoặc cập nhật tên người dùng, số điện thoại, địa chỉ và CCCD. Hồ sơ chỉ hiển thị bốn số cuối của CCCD đã lưu.
-
-## Giao diện
-
-| Vai trò | Trang |
+| Vai trò | Câu hỏi để thử |
 | --- | --- |
-| Mọi người | Trang chủ, tìm bãi, sơ đồ 2D/3D, dự báo chỗ trống, đăng ký và đăng nhập |
-| Khách hàng | Hồ sơ, xe của tôi, đặt chỗ, tìm xe đang gửi trên sơ đồ 2D/3D, lịch sử và bảo mật |
-| Nhân viên | Theo dõi lịch đặt tại bãi phụ trách, nhận xe, trả xe, ghi nhận thanh toán và xem doanh thu từng bãi được phân công |
-| Quản trị | Dashboard, quản lý bãi và chỗ đỗ, phân công nhân viên, theo dõi lịch đặt và xem doanh thu mọi bãi |
+| Khách hàng | “Xe tôi đang đỗ ở đâu?” hoặc “Gia hạn thêm 2 tiếng thì bao nhiêu?” |
+| Nhân viên | “Hôm nay các bãi tôi phụ trách có xe nào sắp đến?” |
+| Quản trị viên | “Bãi nào có doanh thu cao nhất tháng này?” |
 
-Đăng nhập bằng email hoặc số điện thoại riêng đã lưu và mật khẩu. Số Việt Nam có thể nhập dạng 09… hoặc +849…. Các tài khoản cũ có số trùng nhau vẫn đăng nhập bằng email để cập nhật lại số. Đăng nhập dùng Identity bearer token, hết hạn sau 30 phút, lưu trong `sessionStorage` của tab trình duyệt. Frontend gọi `/api/me` để lấy quyền; API kiểm tra quyền trên từng endpoint. Để bật OTP, đăng nhập và mở **Bảo mật**, xác nhận mật khẩu, quét QR trong ứng dụng xác thực rồi nhập mã 6 số. Cất mã khôi phục trước khi rời trang. Mỗi mã khôi phục chỉ dùng được một lần. OTP không cần dịch vụ SMS hoặc email.
+Model mặc định là `gemini-3.5-flash-lite`. Khi triển khai, lưu khóa ở backend bằng `Assistant__ApiKey`. Có thể đổi model qua `Assistant__Model`. Tin nhắn cần phân tích được gửi đến Gemini. Kết quả tra cứu từ tài khoản do backend trả thẳng về React. Giữ mật khẩu, CCCD và OTP ngoài nội dung chat.
 
-Sơ đồ 3D sắp xếp vị trí từ mã chỗ. Xe màu ngọc lam đánh dấu ô được chọn hoặc xe của khách trong mục **Xe đang gửi**. Dự báo dùng k láng giềng gần nhất có trọng số cho 12 giờ tiếp theo, 7 ngày đầy đủ tiếp theo hoặc 4 tuần đầy đủ tiếp theo (thứ Hai đến Chủ Nhật, giờ Việt Nam). Chế độ ngày và tuần hiển thị trung bình và mức thấp nhất. Mô hình dựa trên thứ và giờ nên các tuần có thể giống nhau. API ưu tiên lịch sử vận hành nếu có ít nhất 20 lượt hoàn tất và trải dài 14 ngày, giữ 3 ngày gần nhất để kiểm tra. Khi chưa đủ lịch sử, 8 bãi Đà Nẵng dùng CSV và biểu đồ ghi rõ nguồn mô phỏng. Dự báo không tính lịch đặt sắp tới.
+## Xử lý lỗi thường gặp
 
-## Đặt chỗ tự động bằng tiền cọc
+| Trạng thái | Cách xử lý |
+| --- | --- |
+| Docker báo không kết nối được engine | Mở Docker Desktop, chờ engine chạy rồi chạy lại lệnh ở bước 1. |
+| PostgreSQL báo sai mật khẩu | So khớp mật khẩu trong `smart-parking-db/.env` với User Secrets và cấu hình dùng khi volume được tạo. |
+| Web báo `Failed to fetch` | Mở đường dẫn kiểm tra API để xác nhận HTTPS hoạt động. Kiểm tra cổng trong `frontend/.env` rồi khởi động lại Vite. |
+| Cổng 7171 hoặc 5173 đang được dùng | Dừng phiên cũ đúng cổng rồi chạy lại từ terminal. |
+| Admin mẫu đăng nhập thất bại | Dùng email và mật khẩu đã cấu hình khi tạo Admin. Đổi User Secrets sau đó không đổi mật khẩu của tài khoản đã tạo. |
+| Nhân viên chưa thấy bãi | Kiểm tra vai trò và bãi được giao trong trang **Nhân viên**, rồi đăng nhập lại. |
+| Không thể đặt cọc | Kiểm tra xe đã đăng ký, ô còn trống và số dư khả dụng. |
+| Trợ lý báo chưa kết nối Gemini | Kiểm tra khóa trong User Secrets rồi khởi động lại API. Nếu trợ lý báo quá nhiều yêu cầu, chờ trước khi gửi lại. |
 
-Khách nạp tiền ở **Số dư** bằng VietQR. Sau khi quản trị viên đối soát khoản nạp, số dư khả dụng dùng được để đặt chỗ. Tại **Đặt chỗ**, khách xem tổng phí dự kiến, cọc bằng một giờ gửi và số tiền dự kiến trả thêm. Nút **Đặt cọc và xác nhận** giữ tiền trong ví và xác nhận ô trong cùng một giao dịch. Khi số dư thiếu hoặc ô vừa có người đặt, khách nhận thông báo ngay.
+## Dành cho nhóm phát triển
 
-Hủy trước giờ hẹn được hoàn toàn bộ cọc. Từ giờ hẹn, khách hủy hoặc vắng mặt sẽ mất cọc. Hạn nhận xe là thời điểm sớm hơn giữa giờ hẹn cộng 15 phút và giờ lấy xe. Bãi hủy lịch trước hạn nhận xe sẽ hoàn toàn bộ cọc. Khi nhận xe, nhân viên chọn lịch ở **Nhận xe**. Khi xe ra, hệ thống trừ cọc vào tổng phí đã tính cả gia hạn và phụ phí, trả lại phần cọc dư nếu có và chỉ thu phần còn thiếu. Cọc đang giữ được tách khỏi doanh thu.
-
-Nhân viên theo dõi **Lịch đặt theo bãi** trong phạm vi được giao. Đơn cũ chờ xác nhận vẫn có thể được xử lý ở cuối trang. Đơn cũ không bị giữ cọc hồi tố. Chạy `dotnet ef database update --project backend/Parking.Api` khi cập nhật từ bản trước.
-
-## Chuyển khoản QR
-
-Mặc định ứng dụng có thể ghi nhận tiền mặt. Để bật VietQR, cấu hình tài khoản nhận của đơn vị vận hành bằng User Secrets trong thư mục backend:
-
-```powershell
-dotnet user-secrets set "VietQr:BankBin" "YOUR_SIX_DIGIT_BANK_BIN"
-dotnet user-secrets set "VietQr:AccountNumber" "YOUR_ACCOUNT_NUMBER"
-dotnet user-secrets set "VietQr:AccountName" "YOUR_ACCOUNT_NAME"
-```
-
-Khởi động lại API. Chủ xe mở **Xe đang gửi** để xem phí và xác nhận xe ra, rồi chọn cách thanh toán trên hóa đơn. Nhân viên có thể xác nhận xe ra tại **Trả xe & thu phí**, đồng thời đối soát số tiền và nội dung chuyển khoản. Khách có thể làm mới trạng thái để xem thời gian và phương thức thanh toán.
-
-Trong **Số dư**, khách tạo yêu cầu nạp và chuyển đúng số tiền và nội dung trong mã VietQR. Admin mở **Duyệt nạp số dư**, đối chiếu sao kê rồi nhập số tiền thực nhận và mã giao dịch. Mỗi mã giao dịch chỉ dùng cho một lần đối soát, kể cả giao dịch trả phí qua VietQR. Khi số dư đủ, khách có thể chọn **Trả bằng số dư** trong hóa đơn phí gửi xe.
-
-## Báo cáo doanh thu
-
-Mở **Doanh thu**, chọn bãi và kỳ ngày, tháng hoặc năm. Kỳ ngày chia theo giờ, kỳ tháng chia theo ngày và kỳ năm chia theo tháng. Chọn một cột trên biểu đồ để xem số tiền theo phương thức thanh toán và đối chiếu hàng tương ứng trong bảng.
-
-Hệ thống tính doanh thu theo giờ Việt Nam (UTC+7), dựa trên lúc ghi nhận thanh toán phí gửi xe. Doanh thu gồm khoản cọc đã khấu trừ vào phí, cọc đã thu do khách hủy muộn hoặc vắng mặt và phần phí còn lại đã thanh toán. Tiền nạp và cọc đang giữ chưa được tính vào doanh thu. API kiểm tra phân công trên mỗi yêu cầu báo cáo. Admin có thể chọn mọi bãi và nhân viên chọn được các bãi mình phụ trách.
-
-## API chính
-
-| Nhóm | Endpoint | Quyền |
-| --- | --- | --- |
-| Đăng ký, đăng nhập | `POST /api/accounts` (kèm hồ sơ), `POST /api/auth/register` (email và mật khẩu), `POST /api/auth/login` | Công khai |
-| Bãi xe | `GET /api/parking-lots`; POST/PUT/DELETE cùng nhóm | Công khai để xem, Admin để sửa |
-| Chỗ đỗ | `GET /api/parking-spots`; POST và PATCH `/{id}/active` | Công khai để xem, Admin/Staff để sửa |
-| Xe | `GET /api/vehicles/mine`, `POST /api/vehicles` | Đã đăng nhập |
-| Đặt chỗ | `GET /api/reservations/mine`, `POST /api/reservations`, `POST /{id}/cancel` | Đã đăng nhập |
-| Xử lý đơn cũ | `GET /api/reservations/pending`, `POST /api/reservations/{id}/approve`, `POST /api/reservations/{id}/reject` | Admin hoặc Staff phụ trách bãi |
-| Lịch đã xác nhận, hủy từ phía bãi | `GET /api/reservations/upcoming`, `POST /api/reservations/{id}/release` | Admin hoặc Staff phụ trách bãi |
-| Lịch xe vào theo bãi | `GET /api/reservations/arrivals` | Admin hoặc Staff phụ trách bãi |
-| Gửi xe | `POST /api/parking-sessions/check-in`, `POST /{id}/check-out`, `GET /active` | Admin/Staff |
-| Khách trả xe | `GET /api/parking-sessions/mine/{id}/checkout-quote`, `POST /api/parking-sessions/mine/{id}/check-out` | Chủ lượt gửi |
-| Bảng giá và phí dự kiến | `GET /api/pricing`, `GET /api/pricing/estimate` | Công khai |
-| Lịch sử gửi xe | `GET /api/parking-sessions/mine` | Đã đăng nhập |
-| Tìm xe đang gửi | `GET /api/parking-sessions/mine/active` | Chủ xe, từ lúc nhân viên nhận xe đến khi xác nhận xe ra |
-| Thanh toán | `POST /api/payments/parking-session/{id}` | Admin/Staff |
-| Phí và lịch sử thanh toán | `GET /api/payments/mine` | Chủ xe |
-| Số dư và nạp tiền | `GET /api/wallet/mine`, `POST /api/wallet/top-ups` | Chủ tài khoản |
-| Duyệt nạp số dư | `GET /api/wallet/top-ups/pending`, `POST /api/wallet/top-ups/{id}/approve` | Admin |
-| Trả phí bằng số dư | `POST /api/payments/parking-session/{id}/balance` | Chủ lượt gửi |
-| Thống kê | `GET /api/dashboard/summary` | Admin/Staff |
-| Báo cáo doanh thu | `GET /api/dashboard/revenue?lotId=1&period=month&date=2026-11-01` | Admin hoặc Staff phụ trách bãi |
-| Nhân viên | `POST /api/admin/staff`, `PUT /api/admin/staff/{id}/lots`, `DELETE /api/admin/staff/{id}` | Admin |
-| Hồ sơ tài khoản | `GET /api/me`, `PUT /api/me` (tên người dùng, số điện thoại, địa chỉ, CCCD) | Chủ tài khoản |
-| Tra xe và lịch đặt | `GET /api/vehicles/search?plate=`, `GET /api/reservations/active?plate=` | Admin/Staff |
-| Sơ đồ trạng thái | `GET /api/parking-spots/map?parkingLotId=` | Công khai |
-| Dự báo | `GET /api/parking-lots/{id}/forecast?period=hour\|day\|week&type=` | Công khai |
-| OTP | `GET /api/security/authenticator`; POST `/setup`, `/enable`, `/disable` | Đã đăng nhập |
-| Thông tin VietQR | `GET /api/payments/parking-session/{id}/transfer` | Chủ xe hoặc Admin/Staff, khi lượt gửi chưa thanh toán |
-| Thanh toán chưa thu | `GET /api/parking-sessions/unpaid` | Admin/Staff |
-
-`/api/auth/login?useCookies=false` trả về Identity bearer token; gửi token trong `Authorization: Bearer ...`. Đây là token của ASP.NET Identity, **không phải JWT**. Tài khoản đăng ký thường không tự có quyền Admin hoặc Staff. Admin có thể gán hoặc thu hồi quyền Staff; người dùng cần đăng nhập lại để token nhận quyền mới. Tài khoản Admin ban đầu chỉ được tạo trong môi trường Development qua User Secrets.
-
-Loại chỗ xe gồm `1` cho xe máy và `2` cho ô tô. Một lượt đặt trước kéo dài tối đa 30 ngày. API nhận thời gian đặt chỗ theo UTC. Bảng giá hiển thị phí dự kiến khi khách chọn xe và thời gian đặt. Mức mặc định là 5.000 đồng/giờ cho xe máy và 15.000 đồng/giờ cho ô tô, làm tròn lên và tính tối thiểu một giờ theo thời gian đỗ thực tế.
-
-Đơn mới lưu mức giá lúc đặt. Ra trước phút hẹn cộng 5.000 đồng mỗi lượt. Ra sau phút hẹn cộng 20.000 đồng cho mỗi 24 giờ trễ bắt đầu. Phụ phí đặt trước mặc định là 0 đồng. Có thể chỉnh các khóa `ParkingPricing:MotorbikeHourlyRate`, `ParkingPricing:CarHourlyRate`, `ParkingPricing:EarlyExitFee`, `ParkingPricing:LateDailyFee` và `ParkingPricing:ReservationSurcharge` trong cấu hình API. Đơn đặt đã có trước lần cập nhật dùng giá gửi theo giờ như trước.
-
-## Kiểm thử
-
-`tests/smoke.ps1` dùng PowerShell 7 và một database kiểm thử riêng đã chạy migration. Đặt `PARKING_TEST_ADMIN_EMAIL` và `PARKING_TEST_ADMIN_PASSWORD` theo Admin của database kiểm thử, chạy API tại `http://127.0.0.1:5188`, rồi chạy `./tests/smoke.ps1`. Bài kiểm thử tạo dữ liệu mẫu vào database đã cấu hình.
-
-Có thể thêm cờ `-ConfiguredTransfer` khi API kiểm thử đã cấu hình tài khoản nhận **giả lập** để kiểm tra luồng ghi nhận chuyển khoản. Không thực hiện chuyển tiền trong bài kiểm thử.
+- **Mã nguồn.** `frontend/src` chứa giao diện React. Backend nhóm chức năng theo nghiệp vụ trong `backend/Parking.Api/Features`. [Cấu trúc backend](backend/README.md)
+- **Cơ sở dữ liệu.** API dùng EF Core migrations để dựng `parking_db`. Sơ đồ và SQL tiếng Việt được lưu riêng để phục vụ báo cáo. [Cấu hình PostgreSQL và ERD](smart-parking-db/README.md)
+- **Học máy.** Dự báo KNN theo thứ và giờ có chế độ theo giờ, ngày và tuần. Khi lịch sử vận hành còn ít, bãi trong danh mục Đà Nẵng dùng CSV mô phỏng và gắn nhãn nguồn trên giao diện. [CSV huấn luyện](backend/Parking.Api/Data/Training/da-nang-occupancy.csv)
+- **REST API.** Dùng OpenAPI để tra hợp đồng hiện tại. `POST /api/auth/login?useCookies=false` trả bearer token. `POST /api/assistant/messages` cần phiên đã đăng nhập. Khi khách bấm xác nhận, giao diện gọi cùng `POST /api/reservations` dùng cho biểu mẫu đặt chỗ.
+- **Kiểm tra.** Chạy `dotnet build ./backend/Parking.Api`, `npm run build --prefix frontend` và `npm run lint --prefix frontend`. Để kiểm tra tích hợp, chạy script trên PostgreSQL riêng đã cập nhật migration, cấu hình `PARKING_TEST_ADMIN_EMAIL` và `PARKING_TEST_ADMIN_PASSWORD`, rồi gọi `./tests/smoke.ps1 -BaseUrl https://localhost:7171` khi API thử nghiệm chạy ở cổng đó. Script tạo dữ liệu trong database được cấu hình. [Script kiểm tra](tests/smoke.ps1)
