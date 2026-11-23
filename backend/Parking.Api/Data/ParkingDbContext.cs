@@ -17,15 +17,22 @@ public class ParkingDbContext : IdentityDbContext<IdentityUser>
     public DbSet<Reservation> Reservations => Set<Reservation>();
     public DbSet<StaffParkingLot> StaffParkingLots => Set<StaffParkingLot>();
     public DbSet<ParkingSession> ParkingSessions => Set<ParkingSession>();
+    public DbSet<ParkingExtension> ParkingExtensions => Set<ParkingExtension>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<WalletTopUp> WalletTopUps => Set<WalletTopUp>();
     public DbSet<BankReceipt> BankReceipts => Set<BankReceipt>();
     public DbSet<AccountProfile> AccountProfiles => Set<AccountProfile>();
+    public DbSet<ForecastObservation> ForecastObservations => Set<ForecastObservation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+        var observations = modelBuilder.Entity<ForecastObservation>();
+        observations.HasKey(row => new { row.ParkingLotId, row.Type, row.ObservedUtc, row.TargetUtc });
+        observations.HasOne<ParkingLot>().WithMany().HasForeignKey(row => row.ParkingLotId);
+        observations.HasIndex(row => row.ObservedUtc);
         modelBuilder.Entity<AccountProfile>().HasKey(p => p.UserId);
+        modelBuilder.Entity<AccountProfile>().HasIndex(p => p.LoginPhone).IsUnique();
         modelBuilder.Entity<AccountProfile>().HasOne(p => p.User).WithOne()
             .HasForeignKey<AccountProfile>(p => p.UserId);
 
@@ -56,6 +63,11 @@ public class ParkingDbContext : IdentityDbContext<IdentityUser>
         reservation.Property(x => x.BookedEarlyExitFee).HasPrecision(12, 2);
         reservation.Property(x => x.BookedLateDailyFee).HasPrecision(12, 2);
         reservation.Property(x => x.BookedSurcharge).HasPrecision(12, 2);
+        reservation.HasIndex(x => new { x.OwnerId, x.BookingRequestId }).IsUnique();
+        reservation.HasIndex(x => x.ArrivalDeadlineUtc).HasFilter("\"Status\" = 1 AND \"ArrivalDeadlineUtc\" IS NOT NULL");
+        reservation.Property(x => x.CapturedDeposit).HasPrecision(12, 2);
+        reservation.Property(x => x.DepositAmount).HasPrecision(12, 2);
+        modelBuilder.Entity<ParkingSession>().Property(x => x.DepositApplied).HasPrecision(12, 2);
         reservation.Property(x => x.EstimatedFee).HasPrecision(12, 2);
 
         modelBuilder.Entity<StaffParkingLot>().HasKey(x => new { x.UserId, x.ParkingLotId });
@@ -83,6 +95,12 @@ public class ParkingDbContext : IdentityDbContext<IdentityUser>
         session.Property(x => x.EarlyExitFee).HasPrecision(12, 2);
         session.Property(x => x.LateFee).HasPrecision(12, 2);
         session.Property(x => x.Surcharge).HasPrecision(12, 2);
+        var extension = modelBuilder.Entity<ParkingExtension>();
+        extension.HasOne(x => x.ParkingSession).WithMany().OnDelete(DeleteBehavior.Restrict);
+        extension.HasIndex(x => x.ParkingSessionId).IsUnique()
+            .HasFilter($"\"Status\" = {(int)ParkingExtensionStatus.Pending}");
+        extension.Property(x => x.AccruedLateFee).HasPrecision(12, 2);
+        extension.Property(x => x.EstimatedFee).HasPrecision(12, 2);
 
         var topUp = modelBuilder.Entity<WalletTopUp>();
         topUp.HasOne(x => x.Owner).WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Restrict);

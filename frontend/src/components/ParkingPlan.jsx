@@ -1,11 +1,11 @@
 import { parkingLayout, parkingTones } from '../lib/parkingLayout'
 import { spotStatus } from '../lib/format'
 
-export default function ParkingPlan({ spots, selectedId }) {
+export default function ParkingPlan({ spots, selectedId, onSelect, canSelect }) {
   const { positions, width, length, pitch, depth, lane, rows } = parkingLayout(spots)
   const scale = 18
   const w = width * scale, h = length * scale
-  return <svg className="parking-plan" role="img" aria-label="Sơ đồ 2D với vị trí đã chọn được đánh dấu" viewBox={'0 0 ' + w + ' ' + h}>
+  return <svg className="parking-plan" role={onSelect ? "group" : "img"} aria-label="Sơ đồ 2D các ô đỗ" viewBox={'0 0 ' + w + ' ' + h}>
     <rect width={w} height={h} rx="14" fill="#293743" />
     <rect x="13" y="13" width={w - 26} height={h - 26} rx="10" fill="none" stroke="#7b8b8f" strokeWidth="1.5" />
     {Array.from({ length: rows - 1 }, (_, i) => {
@@ -15,7 +15,15 @@ export default function ParkingPlan({ spots, selectedId }) {
     {positions.map(({ spot, x, z }) => {
       const active = spot.id === selectedId, color = parkingTones[spot.status] || parkingTones.Inactive
       const cx = w / 2 + x * scale, cy = h / 2 + z * scale
-      return <g key={spot.id}>
+      const selectable = onSelect && canSelect(spot)
+      return <g key={spot.id} className={selectable ? 'selectable-spot' : undefined}
+        role={selectable ? 'button' : undefined} tabIndex={selectable ? 0 : undefined}
+        aria-label={spot.code + ' · ' + spotStatus[spot.status]} aria-pressed={selectable ? active : undefined}
+        opacity={onSelect && !selectable && !active ? .62 : 1}
+        onClick={selectable ? () => onSelect(spot) : undefined}
+        onKeyDown={selectable ? (event) => {
+          if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect(spot) }
+        } : undefined}>
         <title>{spot.code + ' · ' + (spotStatus[spot.status] || '')}</title>
         <rect x={cx - (pitch - .16) * scale / 2} y={cy - depth * scale / 2} width={(pitch - .16) * scale} height={depth * scale}
           rx="3" fill={color} fillOpacity=".22" stroke={color} strokeWidth="1.8" />

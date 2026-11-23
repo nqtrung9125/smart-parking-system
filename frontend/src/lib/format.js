@@ -12,7 +12,7 @@ export function parkingDuration(milliseconds) {
 }
 export const reservationStates = { confirmed: 1, cancelled: 2, used: 3, pending: 4, rejected: 5, expired: 6 }
 export const reservationStatus = {
-  1: 'Đã xác nhận', 2: 'Đã hủy', 3: 'Đã sử dụng', 4: 'Chờ xác nhận', 5: 'Đã từ chối', 6: 'Hết hạn xác nhận',
+  1: 'Đã xác nhận', 2: 'Đã hủy', 3: 'Đã sử dụng', 4: 'Chờ xác nhận', 5: 'Đã từ chối', 6: 'Hết hạn xác nhận', 7: 'Vắng mặt',
 }
 export const spotStatus = { Available: 'Có thể sử dụng', Occupied: 'Đang có xe', Reserved: 'Đang được đặt', Inactive: 'Tạm đóng' }
 

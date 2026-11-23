@@ -37,7 +37,7 @@ export function AdminDashboardPage() {
           <progress max="100" value={utilization} aria-label="Tỷ lệ chỗ đang có xe" />
         </section>
         <section className="portal-card admin-today">
-          <h2>Hoạt động hôm nay</h2>
+          <div className="today-heading"><h2>Hoạt động hôm nay</h2><Link to="/admin/revenue">Xem doanh thu ↗</Link></div>
           <p>Tính từ 00:00 giờ Việt Nam.</p>
           <dl><div><dt>Lượt xe vào</dt><dd>{data.checkInsToday}</dd></div><div><dt>Doanh thu ghi nhận</dt><dd>{money(data.revenueToday)}</dd></div></dl>
         </section>
@@ -49,7 +49,7 @@ export function AdminDashboardPage() {
         {[['/admin/manage', 'pin', 'Bãi xe', 'Thêm hoặc cập nhật bãi xe.'],
           ['/admin/manage?tab=spots', 'map', 'Chỗ đỗ', 'Thêm vị trí và thay đổi trạng thái.'],
           ['/admin/manage?tab=staff', 'car', 'Nhân viên', 'Cấp quyền và phân công bãi.'],
-          ['/admin/reservations', 'clock', 'Duyệt đặt chỗ', 'Xem các yêu cầu chờ xác nhận.']].map(([to, icon, title, hint]) =>
+          ['/admin/reservations', 'clock', 'Lịch đặt theo bãi', 'Xem các lịch đã xác nhận.']].map(([to, icon, title, hint]) =>
           <Link className="portal-card shortcut" to={to} key={to}><span className="portal-icon"><Icon name={icon} /></span>
             <span className="shortcut-copy"><strong>{title}</strong><small>{hint}</small></span><Icon name="arrow" size={16} />
           </Link>)}
@@ -115,7 +115,7 @@ export function AdminManagePage() {
   const management = {
     lots: ['Quản lý bãi xe', 'Thêm bãi mới hoặc cập nhật tên và địa chỉ.'],
     spots: ['Quản lý chỗ đỗ', 'Thêm vị trí, mở lại hoặc tạm đóng chỗ đỗ.'],
-    staff: ['Quản lý nhân viên', 'Cấp quyền vận hành và phân công bãi để nhân viên duyệt đặt chỗ.'],
+    staff: ['Quản lý nhân viên', 'Cấp quyền vận hành và phân công bãi để nhân viên quản lý lịch xe.'],
   }
 
   return <main className="page-wrap admin-management"><PageHeader title={management[tab][0]} description={management[tab][1]} />
@@ -139,7 +139,7 @@ export function AdminManagePage() {
         {staffAssignment && <form className="panel" onSubmit={saveStaffLots}>
           <h2>Phân công bãi</h2><p className="muted-text">{staffAssignment.email}</p>
           {lots.loading ? <Loading /> : lots.data?.length ? <fieldset className="staff-lot-options">
-            <legend>Bãi được duyệt đặt chỗ</legend>
+            <legend>Bãi phụ trách</legend>
             {lots.data.map((lot) => <label key={lot.id}>
               <input type="checkbox" checked={assignedLotIds.includes(lot.id)} onChange={(event) => {
                 const checked = event.target.checked

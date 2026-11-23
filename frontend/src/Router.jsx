@@ -18,8 +18,11 @@ import CustomerPaymentsPage from './pages/CustomerPaymentsPage'
 import WalletPage from './pages/WalletPage'
 import WalletReviewPage from './pages/WalletReviewPage'
 import RevenuePage from './pages/RevenuePage'
+import ParkingSearchPage from './pages/ParkingSearchPage'
+import ForecastOperationsPage from './pages/ForecastOperationsPage'
 import PortalLayout from './components/PortalLayout'
 import { useAuth } from './auth/useAuth'
+import ParkingAssistant from './components/ParkingAssistant'
 
 export default function AppRouter() {
   const { pathname, hash } = useLocation()
@@ -31,10 +34,11 @@ export default function AppRouter() {
     else window.scrollTo({ top: 0, behavior: 'instant' })
   }, [pathname, hash, ready])
 
-  return <Routes>
+  return <><Routes>
     <Route element={<Layout matchPortal />}>
       <Route path="/" element={<Home />} />
       <Route path="/lots/:id" element={<LotDetailPage />} />
+      <Route path="/parking-search" element={<ParkingSearchPage />} />
     </Route>
     <Route element={<Layout />}>
       <Route path="/login" element={<AuthPage key="login" />} />
@@ -61,6 +65,7 @@ export default function AppRouter() {
         <Route path="/staff/check-out" element={<StaffCheckOutPage />} />
         <Route path="/staff/reservations" element={<ReservationReviewPage />} />
         <Route path="/staff/revenue" element={<RevenuePage />} />
+        <Route path="/staff/forecast" element={<ForecastOperationsPage />} />
       </Route>
     </Route>
     <Route element={<RequireAuth roles={['Admin']} />}>
@@ -70,8 +75,11 @@ export default function AppRouter() {
         <Route path="/admin/reservations" element={<ReservationReviewPage />} />
         <Route path="/admin/wallet" element={<WalletReviewPage />} />
         <Route path="/admin/revenue" element={<RevenuePage />} />
+        <Route path="/admin/forecast" element={<ForecastOperationsPage admin />} />
       </Route>
     </Route>
-    <Route path="*" element={<main className="page-wrap"><h1>Không tìm thấy trang</h1><a href="/">Về trang chủ</a></main>} />
-  </Routes>
+    <Route element={<Layout matchPortal />}>
+      <Route path="*" element={<main className="page-wrap"><section className="panel"><h1>Không tìm thấy trang</h1><a className="button main-button" href="/">Về trang chủ</a></section></main>} />
+    </Route>
+  </Routes><ParkingAssistant /></>
 }

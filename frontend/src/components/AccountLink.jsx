@@ -1,10 +1,17 @@
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { initials, roleNames } from '../lib/format'
+import { useAuth } from '../auth/useAuth'
+import NavDisclosure from './NavDisclosure'
 
 export default function AccountLink({ user }) {
-  return <Link className="account-link" to="/account" aria-label="Thông tin tài khoản">
-    <span className="account-avatar" aria-hidden="true">{initials(user.displayName || user.email?.split('@')[0])}</span>
-    <span className="account-link-copy"><strong>{user.displayName || 'Tài khoản'}</strong><span>{roleNames(user.roles).join(' · ')}</span></span>
-    <span className="account-link-arrow" aria-hidden="true">↗</span>
-  </Link>
+  const { logout } = useAuth()
+  const navigate = useNavigate()
+  const name = user.displayName || user.email || 'Tài khoản'
+  return <NavDisclosure label={'Menu tài khoản ' + name} trigger={<span className="account-link">
+    <span className="account-avatar" aria-hidden="true">{initials(name)}</span>
+    <span className="account-link-copy"><strong>{name}</strong><span>{roleNames(user.roles).join(' · ')}</span></span><span aria-hidden="true">⌄</span>
+  </span>}>
+    <Link to="/account">Hồ sơ tài khoản</Link><Link to="/security">Bảo mật</Link>
+    <button type="button" onClick={() => { logout(); navigate('/') }}>Đăng xuất</button>
+  </NavDisclosure>
 }

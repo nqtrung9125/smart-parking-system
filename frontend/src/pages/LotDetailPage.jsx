@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useParams, useSearchParams } from 'react-router'
 import { useAuth } from '../auth/useAuth'
 import { portalFor } from '../lib/portal'
 import { useResource } from '../lib/useResource'
@@ -13,6 +13,8 @@ const groups = { Available: 'Trống', Occupied: 'Có xe', Reserved: 'Đã đặ
 
 export default function LotDetailPage() {
   const { id } = useParams()
+  const [params] = useSearchParams()
+  const spot = Number(params.get('spot'))
   const { user, token } = useAuth()
   const isStaff = portalFor(user) === 'staff'
   const assigned = useResource(isStaff ? '/api/parking-lots/assigned' : null, token)
@@ -22,15 +24,15 @@ export default function LotDetailPage() {
       {assigned.loading ? <Loading /> : assigned.error ? <Notice error={assigned.error} /> : <Empty>Bãi này không nằm trong danh sách bạn phụ trách.</Empty>}
     </main>
   }
-  return <LotDetail key={id} id={id} isStaff={isStaff} />
+  return <LotDetail key={id + ':' + spot} id={id} isStaff={isStaff} initialSpot={spot || null} />
 }
 
-function LotDetail({ id, isStaff }) {
+function LotDetail({ id, isStaff, initialSpot }) {
   const lot = useResource('/api/parking-lots/' + id)
   const map = useResource('/api/parking-spots/map?parkingLotId=' + id)
   const [mode, setMode] = useState('2D')
   const [filter, setFilter] = useState(0)
-  const [selectedId, setSelectedId] = useState(null)
+  const [selectedId, setSelectedId] = useState(initialSpot)
   const all = map.data || noSpots
   const spots = useMemo(() => filter ? all.filter((spot) => spot.type === filter) : all, [all, filter])
   const selected = spots.find((spot) => spot.id === selectedId)

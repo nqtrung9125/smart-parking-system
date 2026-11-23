@@ -1,0 +1,9 @@
+.parking-extension { margin: 1rem 0; }
+.extension-form { display: grid; gap: .75rem; }
+.extension-form h3 { margin: 0; }
+.extension-form > button { justify-self: start; }
+.extension-quote, .extension-pending { margin-block: .75rem; padding: .9rem; border-radius: .6rem; background: #eef7f4; }
+.extension-comparison { display: grid; gap: .5rem; margin: 0 0 .75rem; }
+.extension-comparison > div { display: flex; justify-content: space-between; align-items: baseline; gap: .75rem; }
+.extension-comparison dd { margin: 0; font-weight: 700; white-space: nowrap; }
+.extension-pending p { margin-block: .5rem; }

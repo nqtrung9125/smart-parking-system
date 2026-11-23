@@ -110,3 +110,10 @@
 @media (max-width: 1100px) { .workspace-header { padding-inline: 25px; flex-wrap: wrap; }.workspace-header nav { order: 3; width: 100%; margin-left: 0; }.account-actions { margin-left: auto; } }
 @media (max-width: 780px) { .two-column, .two-column.wide-left, .auth-page { grid-template-columns: 1fr; }.admin-stats { grid-template-columns: repeat(2, 1fr); }.auth-art { display: none; }.auth-page { gap: 18px; } }
 @media (max-width: 560px) { .page-wrap, .auth-page { width: calc(100% - 32px); padding-top: 30px; }.workspace-header { padding: 12px 16px; gap: 10px; }.workspace-header nav { flex-wrap: nowrap; overflow-x: auto; }.workspace-header nav a { white-space: nowrap; }.account-email { display: none; }.page-header { align-items: start; flex-direction: column; }.form-grid { grid-template-columns: 1fr; gap: 0; }.stat-row { grid-template-columns: repeat(2, 1fr); }.stat-row .stat-box:last-child { grid-column: 1 / -1; }.admin-stats { gap: 8px; }.stat-box { padding: 15px; }.stat-box strong { font-size: 27px; }.panel { padding: 18px; }.data-item { align-items: flex-start; flex-direction: column; }.inline-form { align-items: stretch; flex-direction: column; }.inline-form .button { width: 100%; }.tabs { overflow-x: auto; }.tabs button { white-space: nowrap; } }
+
+.deposit-summary { padding: 1rem; background: var(--surface, #f4f7f6); border-radius: .75rem; color: #203735; }
+.deposit-summary dl { display: grid; gap: .4rem; margin: 0; }
+.deposit-summary dl div { display: flex; justify-content: space-between; gap: 1rem; }
+.deposit-summary dd { margin: 0; font-weight: 650; }
+.deposit-summary p { margin: .65rem 0 0; font-size: .88rem; }
+.deposit-summary a { display: inline-block; margin-top: .5rem; }
